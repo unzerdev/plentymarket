@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "menu": {
+    "Config.credentialsTab": {
+      "label": "Config.credentialsTab",
+      "formFields": {
+        "publicKey": {
+          "type": "inputText",
+          "required": false,
+          "label": "Config.publicKeyLabel",
+          "options": {
+            "defaultValue": ""
+          }
+        },
+        "privateKey": {
+          "type": "inputText",
+          "required": false,
+          "label": "Config.privateKeyLabel",
+          "options": {
+            "defaultValue": ""
+          }
+        },
+        "useExternalOrderMatching": {
+          "type": "checkBox",
+          "required": false,
+          "label": "Config.useExternalOrderMatchingLabel",
+          "options": {
+            "defaultValue": "false"
+          }
+        }
+      }
+    }
+  }
+}

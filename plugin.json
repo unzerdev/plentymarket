@@ -1,0 +1,47 @@
+{
+  "name": "UnzerPayment",
+  "namespace": "UnzerPayment",
+  "marketplaceName": {
+    "de": "Unzer Payment",
+    "en": "Unzer Payment"
+  },
+  "description": "The official Unzer payment plugin for plentyMarkets",
+  "shortDescription": {
+    "de": "Unzer ist dein flexibler Payment-Partner für alle Anforderungen deines Webshops.",
+    "en": "Unzer is your online payment partner for every situation."
+  },
+  "type": "payment",
+  "categories": [
+    "4083"
+  ],
+  "version": "1.0.3",
+  "license": "AGPL-3.0",
+  "pluginIcon": "icon_plugin_xs.png",
+  "price": 0.0,
+  "keywords": [
+    "unzer",
+    "plentymarkets",
+    "payment"
+  ],
+  "author": "Unzer",
+  "authorIcon": "icon_author_xs.png",
+  "email": "support@unzer.com",
+  "phone": "+49 30 837 93 000",
+  "serviceProvider": "UnzerPayment\\Providers\\ServiceProvider",
+  "containers": [],
+  "dataProviders": [
+  ],
+  "require": {
+    "IO": ">=5.0.0",
+    "Ceres": ">=5.0.0"
+  },
+  "platform": {
+    "php": ">=8.0"
+  },
+  "dependencies": {
+    "unzerdev/php-sdk": "3.7.0"
+  },
+  "runOnBuild": [
+    "UnzerPayment\\Migrations\\CreateTransactionTable"
+  ]
+}
