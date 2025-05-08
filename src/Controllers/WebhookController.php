@@ -8,6 +8,7 @@ use Plenty\Plugin\Http\Response;
 use UnzerPayment\Repositories\TransactionRepository;
 use UnzerPayment\Services\ApiService;
 use UnzerPayment\Services\ConfigService;
+use UnzerPayment\Services\OrderService;
 use UnzerPayment\Traits\LoggingTrait;
 
 class WebhookController extends Controller
@@ -21,6 +22,7 @@ class WebhookController extends Controller
     ];
 
     use LoggingTrait;
+
     private Response $response;
     private Request $request;
 
@@ -33,7 +35,7 @@ class WebhookController extends Controller
 
     public function webhook(): string
     {
-        $this->log(__CLASS__, __METHOD__, 'start', '', ['content'=>$this->request->getContent()]);
+        $this->log(__CLASS__, __METHOD__, 'start', '', ['content' => $this->request->getContent()]);
         $data = json_decode($this->request->getContent(), true);
 
 
@@ -58,45 +60,26 @@ class WebhookController extends Controller
         $transactionRepository = pluginApp(TransactionRepository::class);
         $transaction = $transactionRepository->getTransactionByUnzerPaymentId($data['paymentId']);
         if (empty($transaction)) {
-            $transactionRepository->persistUnzerPayment($payment);
+            $transaction = $transactionRepository->persistUnzerPayment($payment);
         }
 
-//
-//        $orderId = $this->orderHelper->getOrderIdFromPaymentId($data['paymentId']);
-//        if (empty($orderId)) {
-//            $this->logger->warning('no order id for payment id in webhook event', ['webhook_data' => $data]);
-//            return $this->getJsonResponse(false, ['msg' => 'no order id for payment id in webhook event']);
-//        }
-//
-//        switch ($data['event']) {
-//            case WebhookEvents::CHARGE_CANCELED:
-//            case WebhookEvents::AUTHORIZE_CANCELED:
-//                $this->handleCancel($data['paymentId'], $orderId);
-//                break;
-//            case WebhookEvents::AUTHORIZE_SUCCEEDED:
-//                $this->handleAuthorizeSucceeded($data['paymentId'], $orderId);
-//                break;
-//            case WebhookEvents::CHARGE_SUCCEEDED:
-//                $this->handleChargeSucceeded($data['paymentId'], $orderId);
-//                break;
-//            case WebhookEvents::PAYMENT_CHARGEBACK:
-//                $this->handleChargeback($data['paymentId'], $orderId);
-//                break;
-//        }
-//        return $this->getJsonResponse(true, ['msg' => 'webhook processed']);
-//        $apiService = pluginApp(ApiService::class);
-//        $payment = $apiService->getUnzerPayment($this->request->get('paymentId'));
+        if ($transaction) {
+            if ($transaction->orderId && $transaction->unzerPaymentId) {
+                $orderService = pluginApp(OrderService::class);
+                $orderService->syncPaymentInformation($transaction->orderId, $transaction->unzerPaymentId, 'webhook');
+            }
+        }
 
         return 'done';
     }
 
     public function register(): string
     {
-        $this->log(__CLASS__, __METHOD__, 'start', '', ['content'=>$this->request->getContent()]);
+        $this->log(__CLASS__, __METHOD__, 'start', '', ['content' => $this->request->getContent()]);
 
         $configService = pluginApp(ConfigService::class);
         $webhookUrl = $configService->getWebhookUrl();
-        if(empty($webhookUrl)) {
+        if (empty($webhookUrl)) {
             $this->error(__CLASS__, __METHOD__, 'no_webhook_url', 'no webhook url configured');
             return 'no webhook url configured';
         }

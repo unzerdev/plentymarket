@@ -1,4 +1,8 @@
 # Versionshinweise für Unzer Payments
+
+## 1.1.0
+- Update auf Pay Page v2
+
 ## 1.0.3
 - Zahlungsobjekte erweitert, damit Hash immer eindeutig ist
 

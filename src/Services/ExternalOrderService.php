@@ -36,20 +36,16 @@ class ExternalOrderService
             $this->log(__CLASS__, __METHOD__, 'off', '', ['configValue' => $this->configService->getConfigurationValue('useExternalOrderMatching')]);
             return;
         }
-        /** @var AuthHelper $authHelper */
         $authHelper = pluginApp(AuthHelper::class);
         $authHelper->processUnguarded(function () use ($maxTimeBack, $maxStatusId) {
 
             $paymentMethodService = pluginApp(PaymentMethodService::class);
-            $paymentMethodId = $paymentMethodService->getPaymentMethodId();
-
             $orderRepository = pluginApp(OrderRepositoryContract::class);
             $orderRepository->setFilters(
                 [
                     'createdAtFrom' => date('c', time() - $maxTimeBack),
                     'statusIdTo' => $maxStatusId,
                     'orderTypes' => [OrderType::TYPE_SALES_ORDER],
-                    'methodOfPaymentId' => $paymentMethodId, //probably not working
                 ]
             );
             $page = 1;
@@ -65,8 +61,8 @@ class ExternalOrderService
                             break;
                         }
                     }
-                    $this->log(__CLASS__, __METHOD__, 'orderPaymentMethodId', '', ['orderPaymentMethodId' => $orderPaymentMethodId, 'paymentMethodId' => $paymentMethodId]);
-                    if ($orderPaymentMethodId === $paymentMethodId && (int)$order['typeId'] === OrderType::TYPE_SALES_ORDER) {
+                    $this->log(__CLASS__, __METHOD__, 'orderPaymentMethodId', '', ['orderPaymentMethodId' => $orderPaymentMethodId]);
+                    if ($paymentMethodService->isUnzerPaymentMethod($orderPaymentMethodId) && (int)$order['typeId'] === OrderType::TYPE_SALES_ORDER) {
                         $this->processOrder($order);
                     }
 
@@ -160,70 +156,13 @@ class ExternalOrderService
         return $transactionCandidates[0]->unzerPaymentId;
     }
 
-    protected function findUnzerPaymentIdInString(string $string){
+    protected function findUnzerPaymentIdInString(string $string): ?string
+    {
         if (preg_match(Constants::UNZER_PAYMENT_ID_PATTERN, $string, $matches)) {
             return $matches[0];
         }
+        return null;
     }
-
-
-//    protected function doAddressesMatch($order, $chargePermission): bool
-//    {
-//        $chargePermissionAddress = $chargePermission->shippingAddress;
-//        $chargePermissionAddressString = $chargePermissionAddress->name . ' ' . $chargePermissionAddress->city . ' ' . $chargePermissionAddress->postalCode;
-//        $orderAddress = $this->getShippingAddressArray($order);
-//
-//        $orderAddressString = $orderAddress['name2'] . ' ' . $orderAddress['name3'] . ' ' . $orderAddress['town'] . ' ' . $orderAddress['postalCode'];
-//
-//        $regex = '/[^a-z0-9 ]/i';
-//        $chargePermissionAddressString = preg_replace($regex, '', $chargePermissionAddressString);
-//        $orderAddressString = preg_replace($regex, '', $orderAddressString);
-//
-//        $chargePermissionAddressParts = explode(' ', $chargePermissionAddressString);
-//        $orderAddressParts = explode(' ', $orderAddressString);
-//
-//        $diff1 = array_diff($chargePermissionAddressParts, $orderAddressParts);
-//        $diff2 = array_diff($orderAddressParts, $chargePermissionAddressParts);
-//
-//        $differenceNumber = count($diff1) + count($diff2);
-//        $originalNumber = count($chargePermissionAddressParts) + count($orderAddressParts);
-//        $differencePercentage = $differenceNumber / $originalNumber;
-//        $this->log(__CLASS__, __METHOD__, 'addressMatch', '', [
-//            'chargePermissionAddress' => $chargePermissionAddress,
-//            'orderAddress' => $orderAddress,
-//            'chargePermissionAddressString' => $chargePermissionAddressString,
-//            'orderAddressString' => $orderAddressString,
-//            'diff1' => $diff1,
-//            'diff2' => $diff2,
-//            'differenceNumber' => $differenceNumber,
-//            'originalNumber' => $originalNumber,
-//            'differencePercentage' => $differencePercentage,
-//        ]);
-//        return $differencePercentage <= 0.25;
-//    }
-
-//    protected function getShippingAddressArray($order): ?array
-//    {
-//        $shippingAddress = null;
-//        foreach ($order['addressRelations'] as $addressRelation) {
-//            if ($addressRelation['typeId'] == AddressRelationType::DELIVERY_ADDRESS) {
-//                $shippingAddressId = (int)$addressRelation['addressId'];
-//                break;
-//            }
-//        }
-//
-//        if (empty($shippingAddressId)) {
-//            return null;
-//        }
-//
-//        foreach ($order['addresses'] as $address) {
-//            if ((int)$address['id'] === $shippingAddressId) {
-//                $shippingAddress = $address;
-//                break;
-//            }
-//        }
-//        return $shippingAddress;
-//    }
 
     protected function getEmailAddressesFromOrder($order): array
     {
@@ -249,7 +188,7 @@ class ExternalOrderService
         $orderService = pluginApp(OrderService::class);
         $order = $orderService->getOrder($orderId);
 
-        if(empty($order)) {
+        if (empty($order)) {
             $this->log(__CLASS__, __METHOD__, 'orderNotFound', '', ['orderId' => $orderId]);
             return;
         }

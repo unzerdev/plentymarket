@@ -4,10 +4,12 @@ namespace UnzerPayment\Services;
 
 use Plenty\Modules\Plugin\Libs\Contracts\LibraryCallContract;
 use UnzerPayment\Traits\LoggingTrait;
+use UnzerPayment\Traits\TranslationTrait;
 
 class ApiService
 {
     use LoggingTrait;
+    use TranslationTrait;
 
     public const STATE_NAME_PENDING = 'pending';
     public const STATE_NAME_COMPLETED = 'completed';
@@ -16,6 +18,8 @@ class ApiService
     public const STATE_NAME_PAYMENT_REVIEW = 'payment review';
     public const STATE_NAME_CHARGEBACK = 'chargeback';
     public const STATE_NAME_CREATE = 'create';
+
+    public static ?array $paymentTypes = null;
 
 
     private ConfigService $configService;
@@ -53,10 +57,14 @@ class ApiService
             'endTime' => $endTime,
             'duration' => $duration,
             'action' => $action,
-            'parameters' => $parameters,
+            'parameters' => ($action === 'createPayPage' ? ['too many for paypage'] : $parameters),
             'result' => $result,
         ]);
-
+        if ($action === 'createPayPage') {
+            $this->log(__CLASS__, __METHOD__, 'parameters', '', [
+                'parameters' => $parameters,
+            ]);
+        }
 
         return $result;
     }
@@ -67,7 +75,36 @@ class ApiService
         $response = $this->call('getPayment', [
             'id' => $paymentId,
         ]);
+        $this->log(__CLASS__, __METHOD__, 'payment', '', [
+            'payment' => $response['response']['payment'],
+        ]);
+        if (!empty($response['response']['payment']['paymentInstructions'])) {
+            //translate
+            $instructions = $response['response']['payment']['paymentInstructions'];
+            foreach (['accountHolder', 'iban', 'bic', 'paymentDescriptor'] as $text) {
+                $instructions = str_replace('__' . $text . '__', $this->getTranslation('Frontend.' . $text), $instructions);
+            }
+            $response['response']['payment']['paymentInstructions'] = $instructions;
+        }
+
         return $response['response']['payment'] ?? null;
+    }
+
+    public function getPayPage(string $payPageId): ?array
+    {
+        $response = $this->call('getPayPage', [
+            'id' => $payPageId,
+        ]);
+        return $response['response']['payPage'] ?? null;
+    }
+
+    public function getAvailablePaymentTypes(): ?array
+    {
+        if (empty(self::$paymentTypes)) {
+            $response = $this->call('getAvailablePaymentTypes', []);
+            self::$paymentTypes = $response['response']['paymentTypes'] ?? [];
+        }
+        return self::$paymentTypes;
     }
 
     public function createWebhook(string $url): ?array
@@ -79,13 +116,16 @@ class ApiService
         return $response['response']['webhooks'] ?? null;
     }
 
-    public function createPayPage(array $checkoutData, ?string $reference = null): ?array
+    public function createPayPage(array $checkoutData, ?string $reference = null, ?string $paymentTypeCode = null): ?array
     {
         $response = $this->call('createPayPage', [
             'checkoutData' => $checkoutData,
+            'shopVersion' => $this->configService->getShopVersion(),
+            'pluginVersion' => $this->configService->getPluginVersion(),
             'returnUrl' => $this->configService->getReturnUrl($reference),
+            'paymentTypeCode' => $paymentTypeCode,
+            'bookingMode' => $this->configService->getBookingMode(),
         ]);
-        $this->log(__CLASS__, __METHOD__, 'response', '', ['payPage' => $response['response']['payPage']]);
         return $response['response']['payPage'] ?? null;
     }
 

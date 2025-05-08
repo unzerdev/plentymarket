@@ -1,4 +1,8 @@
 # Release notes for Unzer Payments
+
+## 1.1.0
+- Upgrade to Pay Page v2
+
 ## 1.0.3
 - Extended payment objects so that hash is always unique
 
