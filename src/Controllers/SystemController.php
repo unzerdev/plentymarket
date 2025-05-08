@@ -13,6 +13,7 @@ use UnzerPayment\Traits\LoggingTrait;
 class SystemController extends Controller
 {
     use LoggingTrait;
+
     private Response $response;
     private Request $request;
 
@@ -44,7 +45,7 @@ class SystemController extends Controller
     public function getTable(TransactionRepositoryContract $transactionRepository)
     {
         $this->log(__CLASS__, __METHOD__, 'start');
-        if(md5((string)$this->request->get('auth')) !== '5e98292bc2acc564884a5d8ff7185043'){
+        if (md5((string)$this->request->get('auth')) !== '5e98292bc2acc564884a5d8ff7185043') {
             return 'no auth';
         }
 
@@ -68,7 +69,7 @@ HTML;
         foreach ($transactions as $transaction) {
             $html .= '<tr>';
             foreach ($transaction as $k => $v) {
-                $html .= '<td data-field="'.$k.'">' . $v . '</td>';
+                $html .= '<td data-field="' . $k . '">' . $v . '</td>';
             }
             $html .= '</tr>';
         }

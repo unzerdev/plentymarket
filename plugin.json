@@ -14,7 +14,7 @@
   "categories": [
     "4083"
   ],
-  "version": "1.0.3",
+  "version": "1.1.0",
   "license": "AGPL-3.0",
   "pluginIcon": "icon_plugin_xs.png",
   "price": 0.0,
@@ -39,9 +39,10 @@
     "php": ">=8.0"
   },
   "dependencies": {
-    "unzerdev/php-sdk": "3.7.0"
+    "unzerdev/php-sdk": "3.11.*"
   },
   "runOnBuild": [
-    "UnzerPayment\\Migrations\\CreateTransactionTable"
+    "UnzerPayment\\Migrations\\CreateTransactionTable",
+    "UnzerPayment\\Migrations\\CreatePaymentMethodsSeparately"
   ]
 }

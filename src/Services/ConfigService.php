@@ -7,7 +7,6 @@ use IO\Extensions\Constants\ShopUrls;
 use IO\Services\SessionStorageService;
 use IO\Services\UrlBuilder\UrlQuery;
 use IO\Services\WebstoreConfigurationService;
-use Plenty\Modules\Helper\Services\WebstoreHelper;
 use Plenty\Modules\Plugin\Contracts\PluginRepositoryContract;
 use Plenty\Modules\Plugin\Models\Plugin;
 use Plenty\Modules\Webshop\Contracts\LocalizationRepositoryContract;
@@ -93,19 +92,9 @@ class ConfigService
         $pluginRepo = pluginApp(PluginRepositoryContract::class);
         $plugin = $pluginRepo->getPluginByName($pluginName);
         if ($plugin && $plugin->name) {
-            $plugin = $pluginRepo->decoratePlugin($plugin, $pluginSetId);
-            return $plugin;
+            return $pluginRepo->decoratePlugin($plugin, $pluginSetId);
         }
         return null;
-    }
-
-    public function getStoreName(): string
-    {
-        /** @var WebstoreHelper $storeHelper */
-        $storeHelper = pluginApp(WebstoreHelper::class);
-        $storeConfig = $storeHelper->getCurrentWebstoreConfiguration();
-        $storeName = $storeConfig->name;
-        return (string)$storeName;
     }
 
     public function isExternalOrderMatchingActive(): bool
@@ -113,25 +102,30 @@ class ConfigService
         return $this->getConfigurationValue('useExternalOrderMatching') === 'true';
     }
 
-    public function getPrivateKey():string
+    public function getPrivateKey(): string
     {
         return (string)$this->getConfigurationValue('privateKey');
     }
 
-    public function getPublicKey():string
+    public function getPublicKey(): string
     {
         return (string)$this->getConfigurationValue('publicKey');
     }
 
-    public function getWebhookUrl():?string
+    public function getBookingMode(): string
+    {
+        return (string)$this->getConfigurationValue('bookingMode');
+    }
+
+    public function getWebhookUrl(): ?string
     {
         return $this->getUrl('payment/unzer-webhook');
     }
 
-    public function getReturnUrl(?string $reference = null):?string
+    public function getReturnUrl(?string $reference = null): ?string
     {
         $url = $this->getUrl('payment/unzer-checkout-return');
-        if(!empty($reference)){
+        if (!empty($reference)) {
             $url .= (strpos($url, '?') === false ? '?' : '&') . 'reference=' . $reference;
         }
         return $url;

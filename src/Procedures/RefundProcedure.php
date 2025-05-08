@@ -21,7 +21,7 @@ class RefundProcedure
     {
 
         try {
-            /** @var Order $order */
+
             $procedureOrderObject = $eventTriggered->getOrder();
             $this->log(__CLASS__, __METHOD__, 'start', '', [$procedureOrderObject]);
             $orderId = 0;
@@ -56,10 +56,11 @@ class RefundProcedure
             }
             $this->log(__CLASS__, __METHOD__, 'info', '', ['orderId' => $orderId, 'procedureOrderObjectId' => $procedureOrderObject->id, 'amount' => $amount]);
             if (empty($orderId)) {
-                throw new Exception('Amazon Pay Refund failed! The given order is invalid!');
+                throw new Exception('Unzer Refund failed! The given order is invalid!');
             }
             $transactionRepository = pluginApp(TransactionRepository::class);
             $transaction = $transactionRepository->getTransactionByOrderId($orderId);
+
 
             if (empty($transaction)) {
                 throw new Exception('No Unzer transaction found for order id: ' . $orderId);
@@ -69,16 +70,18 @@ class RefundProcedure
             $cancellations = $apiService->refund($transaction->unzerPaymentId, $amount);
 
             $orderService = pluginApp(OrderService::class);
-            foreach($cancellations as $cancellation) {
+            $order = $orderService->getOrder($orderId);
+            foreach ($cancellations as $cancellation) {
                 $this->log(__CLASS__, __METHOD__, 'cancellation', '', ['cancellation' => $cancellation]);
                 $refundObject = $orderService->createPaymentObject(
                     $amount,
-                    $cancellation['success']?Payment::STATUS_REFUNDED:Payment::STATUS_REFUSED,
+                    $cancellation['success'] ? Payment::STATUS_REFUNDED : Payment::STATUS_REFUSED,
                     $cancellation['id'],
+                    $order->methodOfPaymentId,
                     'Event Procedure Refund',
                     null,
                     Payment::PAYMENT_TYPE_DEBIT,
-                    $cancellation['success']?Payment::TRANSACTION_TYPE_BOOKED_POSTING:Payment::TRANSACTION_TYPE_PROVISIONAL_POSTING,
+                    $cancellation['success'] ? Payment::TRANSACTION_TYPE_BOOKED_POSTING : Payment::TRANSACTION_TYPE_PROVISIONAL_POSTING,
                     $transaction->currency
                 );
                 $orderService->assignPlentyPaymentToPlentyOrder($refundObject, $procedureOrderObject);

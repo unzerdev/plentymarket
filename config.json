@@ -20,6 +20,24 @@
             "defaultValue": ""
           }
         },
+        "bookingMode": {
+          "type": "selectBox",
+          "required": false,
+          "label": "Config.bookingModeLabel",
+          "options": {
+            "defaultValue": "capture",
+            "selectBoxValues": [
+              {
+                "value": "charge",
+                "caption": "Config.bookingModeChargeLabel"
+              },
+              {
+                "value": "authorize",
+                "caption": "Config.bookingModeAuthorizeLabel"
+              }
+            ]
+          }
+        },
         "useExternalOrderMatching": {
           "type": "checkBox",
           "required": false,
