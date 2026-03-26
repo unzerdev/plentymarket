@@ -2,10 +2,17 @@
 
 namespace UnzerPayment\Services;
 
+use AmazonPayCheckout\Helpers\ConfigHelper;
 use Exception;
+use IO\Constants\OrderPaymentStatus;
 use Plenty\Modules\Authorization\Services\AuthHelper;
 use Plenty\Modules\Order\Contracts\OrderRepositoryContract;
 use Plenty\Modules\Order\Models\Order;
+use Plenty\Modules\Order\Models\OrderItem;
+use Plenty\Modules\Order\Models\OrderItemType;
+use Plenty\Modules\Order\Property\Contracts\OrderPropertyRepositoryContract;
+use Plenty\Modules\Order\Property\Models\OrderProperty;
+use Plenty\Modules\Order\Property\Models\OrderPropertyType;
 use Plenty\Modules\Payment\Contracts\PaymentOrderRelationRepositoryContract;
 use Plenty\Modules\Payment\Contracts\PaymentRepositoryContract;
 use Plenty\Modules\Payment\Models\Payment;
@@ -44,27 +51,11 @@ class OrderService
         $transaction->orderId = $orderId;
         $transactionService->upsertTransaction($transaction);
 
-        $paymentMethodService = pluginApp(PaymentMethodService::class);
-
         $paymentRepository = pluginApp(PaymentRepositoryContract::class);
+        $existingPayments = (array)$paymentRepository->getPaymentsByOrderId($orderId);
 
-        $existingPayments = $paymentRepository->getPaymentsByOrderId($orderId);
-        $doesPaymentObjectExist = false;
-        $doesBookedPaymentObjectExist = false;
-
-        /** @var Payment $existingPayment */
-        foreach ($existingPayments as $existingPayment) {
-            if ($paymentMethodService->isUnzerPaymentMethod((int)$existingPayment->mopId)) {
-                if ($existingPayment->transactionType == Payment::TRANSACTION_TYPE_BOOKED_POSTING) {
-                    $doesBookedPaymentObjectExist = true;
-                }
-                if ($existingPayment->transactionType == Payment::TRANSACTION_TYPE_PROVISIONAL_POSTING) {
-                    $doesPaymentObjectExist = true;
-                }
-            }
-        }
-
-        if (!$doesPaymentObjectExist) {
+        if (!$this->getPaymentObjectByTransactionId($existingPayments, $unzerPaymentId, false)) {
+            //provisional posting for auth
             $paymentObject = $this->createPaymentObject(
                 $payment['amount']['total'],
                 Payment::STATUS_APPROVED,
@@ -79,27 +70,175 @@ class OrderService
             $this->assignPlentyPaymentToPlentyOrder($paymentObject, $order);
         }
 
-        if (!$doesBookedPaymentObjectExist && $payment['state'] === 'completed') {
-            $paymentObject = $this->createPaymentObject(
-                $payment['amount']['charged'],
-                Payment::STATUS_CAPTURED,
-                $unzerPaymentId,
-                $order->methodOfPaymentId,
-                $comment,
-                null,
-                Payment::PAYMENT_TYPE_CREDIT,
-                Payment::TRANSACTION_TYPE_BOOKED_POSTING,
-                $payment['amount']['currency']
-            );
-            $this->assignPlentyPaymentToPlentyOrder($paymentObject, $order);
-            $transaction->paymentId = $paymentObject->id;
-            $transactionService->upsertTransaction($transaction);
+        foreach ($payment['charges'] as $charge) {
+            if (!$charge['isSuccess']) {
+                continue;
+            }
+            $transactionId = $unzerPaymentId . '--' . $charge['id'];
+            if (!$this->getPaymentObjectByTransactionId($existingPayments, $transactionId)) {
+                $paymentObject = $this->createPaymentObject(
+                    $charge['amount'],
+                    Payment::STATUS_CAPTURED,
+                    $transactionId,
+                    $order->methodOfPaymentId,
+                    $comment,
+                    null,
+                    Payment::PAYMENT_TYPE_CREDIT,
+                    Payment::TRANSACTION_TYPE_BOOKED_POSTING,
+                    $charge['currency'] ?? $payment['amount']['currency']
+                );
+                $this->assignPlentyPaymentToPlentyOrder($paymentObject, $order);
+                $transaction->paymentId = $paymentObject->id;
+                $transactionService->upsertTransaction($transaction);
+            }
         }
+
+        if(empty($payment['charges']) && !empty($payment['authorization']) && $payment['authorization']['isSuccess']){
+            $this->log(__CLASS__, __METHOD__, 'authorized', '', ['$payment' => $payment]);
+            $this->setOrderStatusAuthorized($orderId);
+        }else{
+            $this->log(__CLASS__, __METHOD__, 'notAuthorized', '', ['$payment' => $payment]);
+        }
+
+
         return true;
     }
 
+    public function getPaymentObjectByTransactionId(array $paymentObjectArray, string $transactionId, bool $isBooked = true): ?Payment
+    {
+        $this->log(__CLASS__, __METHOD__, 'start', 'searching for payment by transaction ID', [
+            'transactionId' => $transactionId,
+            'isBooked' => $isBooked,
+            'paymentCount' => count($paymentObjectArray),
+        ]);
 
-    public function createPaymentObject($amount, $status, $transactionId, $paymentMethodId, $comment = '', $dateTime = null, $type = Payment::PAYMENT_TYPE_CREDIT, $transactionType = Payment::TRANSACTION_TYPE_BOOKED_POSTING, $currency = 'EUR'): Payment
+        /** @var Payment $paymentObject */
+        foreach ($paymentObjectArray as $paymentObject) {
+            $paymentObjectIsBooked = (int)$paymentObject->transactionType === Payment::TRANSACTION_TYPE_BOOKED_POSTING;
+            if ($isBooked !== $paymentObjectIsBooked) {
+                continue;
+            }
+            /** @var PaymentProperty $property */
+            foreach ($paymentObject->properties as $property) {
+                if ($property->typeId === PaymentProperty::TYPE_TRANSACTION_ID && $property->value === $transactionId) {
+                    $this->log(__CLASS__, __METHOD__, 'found', 'payment found with matching transaction ID', [
+                        'paymentId' => $paymentObject->id,
+                        'transactionId' => $transactionId,
+                    ]);
+                    return $paymentObject;
+                }
+            }
+        }
+
+        $this->log(__CLASS__, __METHOD__, 'notFound', 'no payment found with matching transaction ID', [
+            'transactionId' => $transactionId,
+            'isBooked' => $isBooked,
+        ]);
+        return null;
+    }
+
+    public function setOrderStatusAuthorized($orderId):void
+    {
+        /** @var OrderRepositoryContract $orderRepository */
+        $orderRepository = pluginApp(OrderRepositoryContract::class);
+
+        if ($order = $this->getOrder($orderId)) {
+            if ((float)$order->statusId > 3.001) {
+                return;
+            }
+        }
+        try {
+            $this->log(__CLASS__, __METHOD__, '', '', ['order' => $orderId]);
+
+            /** @var AuthHelper $authHelper */
+            $authHelper = pluginApp(AuthHelper::class);
+            $authHelper->processUnguarded(
+                function () use ($orderRepository, $orderId) {
+                    return $orderRepository->setOrderStatus45((int)$orderId);
+                }
+            );
+        } catch (\Exception $e) {
+            $this->error(__CLASS__, __METHOD__, 'failed', '', [$orderId, $e, $e->getMessage()]);
+        }
+    }
+
+    public function setOrderProperty(int $orderId, int $propertyType, $propertyValue)
+    {
+        /** @var AuthHelper $authHelper */
+        $authHelper = pluginApp(AuthHelper::class);
+
+        /** @var OrderPropertyRepositoryContract $orderPropertyRepository */
+        $orderPropertyRepository = pluginApp(OrderPropertyRepositoryContract::class);
+        $authHelper->processUnguarded(
+            function () use ($orderPropertyRepository, $orderId, $propertyType, $propertyValue) {
+                try {
+                    $orderProperty = $orderPropertyRepository->create([
+                        'orderId' => $orderId,
+                        'typeId' => $propertyType,
+                        'value' => $propertyValue,
+                    ]);
+                    $this->log(__CLASS__, __METHOD__, 'setOrderPropertySuccess', '', [$orderProperty]);
+                } catch (\Exception $e) {
+                    $this->log(__CLASS__, __METHOD__, 'setOrderPropertyError', '', [$e->getCode(), $e->getMessage(), $e->getLine()], true);
+                }
+
+            });
+    }
+
+    public function setOrderExternalId(int $orderId, string $externalId)
+    {
+        /** @var AuthHelper $authHelper */
+        $authHelper = pluginApp(AuthHelper::class);
+
+        /** @var OrderPropertyRepositoryContract $orderPropertyRepository */
+        $orderPropertyRepository = pluginApp(OrderPropertyRepositoryContract::class);
+        $loggable = $this;
+        $authHelper->processUnguarded(
+            function () use ($orderPropertyRepository, $orderId, $externalId, $loggable) {
+                try {
+                    /** @var OrderProperty $existing */
+                    $existing = $orderPropertyRepository->findByOrderId($orderId, OrderPropertyType::EXTERNAL_ORDER_ID);
+                    $existingArray = $existing->toArray();
+                    if (!empty($existingArray)) {
+                        $loggable->log(__CLASS__, __METHOD__, 'existing', '', [$existingArray]);
+                        return;
+                    }
+                    $orderProperty = $orderPropertyRepository->create([
+                        'orderId' => $orderId,
+                        'typeId' => OrderPropertyType::EXTERNAL_ORDER_ID,
+                        'value' => $externalId,
+                    ]);
+                    $loggable->log(__CLASS__, __METHOD__, 'success', '', [$orderProperty]);
+                } catch (\Exception $e) {
+                    $loggable->log(__CLASS__, __METHOD__, 'error', '', [$e->getCode(), $e->getMessage(), $e->getLine()], true);
+                }
+
+            });
+    }
+
+    public function getOrderExternalId(Order $order)
+    {
+        $orderProperties = $order->properties;
+        /** @var OrderProperty $property */
+        foreach ($orderProperties as $property) {
+            if ($property->typeId === OrderPropertyType::EXTERNAL_ORDER_ID) {
+                return $property->value;
+            }
+        }
+        return null;
+    }
+
+    public function createPaymentObject(
+        $amount,
+        $status,
+        $transactionId,
+        $paymentMethodId,
+        $comment = '',
+        $dateTime = null,
+        $type = Payment::PAYMENT_TYPE_CREDIT,
+        $transactionType = Payment::TRANSACTION_TYPE_BOOKED_POSTING,
+        $currency = 'EUR'
+    ): Payment
     {
         $this->log(__CLASS__, __METHOD__, 'start', '', [$amount, $status, $transactionId, $comment, $dateTime, $type, $transactionType, $currency]);
         if ($dateTime === null) {
@@ -126,6 +265,7 @@ class OrderService
         $paymentProperties = [];
         $paymentProperties[] = $this->createPaymentProperty(PaymentProperty::TYPE_BOOKING_TEXT, $transactionId . ' ' . $comment . ' ' . date('Y-m-d H:i:s'));
         $paymentProperties[] = $this->createPaymentProperty(PaymentProperty::TYPE_TRANSACTION_ID, (string)$transactionId);
+        $paymentProperties[] = $this->createPaymentProperty(PaymentProperty::TYPE_REFERENCE_ID, (string)$transactionId);
 
 
         $payment->properties = $paymentProperties;
@@ -198,5 +338,57 @@ class OrderService
                 return $orderRepository->findOrderById($orderId);
             }
         );
+    }
+
+    public function getOrderAmountObjectByCurrency(Order $order, ?string $currency = null)
+    {
+        if (count($order->amounts) === 1) {
+            return $order->amounts[0];
+        }
+        foreach ($order->amounts as $amount) {
+            if ($amount->currency === $currency) {
+                return $amount;
+            }
+        }
+        // try our luck
+        return $order->amounts[0];
+    }
+
+    public function getShippingItemObject(Order $order): ?OrderItem
+    {
+        /** @var OrderItem $orderItem */
+        foreach ($order->orderItems as $orderItem) {
+            if ($orderItem->typeId == OrderItemType::TYPE_SHIPPING_COSTS) {
+                return $orderItem;
+            }
+        }
+        return null;
+    }
+
+    public function getRegularItemObjects(Order $order): array
+    {
+        $return = [];
+        /** @var OrderItem $orderItem */
+        foreach ($order->orderItems as $orderItem) {
+            if ($orderItem->typeId != OrderItemType::TYPE_SHIPPING_COSTS) {
+                $return[] = $orderItem;
+            }
+        }
+        return $return;
+    }
+
+    public function getOrderRelationValue($order, string $relationType){
+        $relations = $order->relations ?? [];
+        $this->log(__CLASS__, __METHOD__, 'allRelations', '', ['$relations'=>$relations, '$order'=>$order]);
+        foreach($relations as $relation){
+            if(!is_object($relation)){
+                continue;
+            }
+            $this->log(__CLASS__, __METHOD__, 'relation', '', ['$relation'=>$relation]);
+            if($relation->relation === $relationType){
+                return $relation->referenceId;
+            }
+        }
+        return null;
     }
 }

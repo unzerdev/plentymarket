@@ -62,6 +62,9 @@ class ExternalOrderService
                         }
                     }
                     $this->log(__CLASS__, __METHOD__, 'orderPaymentMethodId', '', ['orderPaymentMethodId' => $orderPaymentMethodId]);
+                    if(empty($orderPaymentMethodId)){
+                        continue;
+                    }
                     if ($paymentMethodService->isUnzerPaymentMethod($orderPaymentMethodId) && (int)$order['typeId'] === OrderType::TYPE_SALES_ORDER) {
                         $this->processOrder($order);
                     }
@@ -195,9 +198,14 @@ class ExternalOrderService
 
         $this->log(__CLASS__, __METHOD__, 'data', '', [$order, $unzerPaymentId]);
         $unzerPayment = $this->apiService->getUnzerPayment($unzerPaymentId);
-        $this->transactionRepository->persistUnzerPayment($unzerPayment, $orderId);
+        $transactionService = pluginApp(TransactionService::class);
+        $transactionService->persistUnzerPayment($unzerPayment, $orderId);
 
         $orderService->syncPaymentInformation($orderId, $unzerPaymentId, 'Matched from external order');
+
+        if(empty($orderService->getOrderExternalId($order)) && !empty($unzerPayment['basketOrderId'])){
+            $orderService->setOrderExternalId($orderId, (string)$unzerPayment['basketOrderId']);
+        }
 
         $this->log(__CLASS__, __METHOD__, 'end');
     }

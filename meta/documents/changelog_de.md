@@ -1,5 +1,26 @@
 # Versionshinweise für Unzer Payments
 
+## 1.2.0
+
+__Dies ist eine grundlegende Änderung - denken Sie daran, vor dem Update Ihrer LIVE-Umgebung zu testen und ein Backup zu erstellen.__
+* Neu: Umstrukturierung des Checkout-/Bestellvorgangs für eine bessere Bestellabwicklung
+* Neu: Buchungsmodus für Apple Pay, Google Pay, Paypal und Kreditkarte
+* Neu: Zahlungsartenliste für Neuinstallationen mit neuem Design
+* Neu: iDEAL Name und Logo geändert
+* Fix: Verbesserungen der B2B-Rechnungs-UI-Komponenten
+* Fix: Warenkorb-Fix zur Verwendung des Produktnamens als Titel anstelle der ID
+* Fix: Verbesserungen für Ratenzahlung und Rechnung bei B2B-Kunden
+* Fix: Bessere Unterstützung für die neue Keypair-Logik
+
+## 1.1.2
+- Logos ausgetauscht
+
+## 1.1.1
+- Verbesserte Darstellung von Transaktionen im Zahlungsverlauf
+- Handling von abgebrochenen Zahlungen
+- Abgleich externer IDs
+- Länderbeschränkungen für Zahlungsmethoden
+
 ## 1.1.0
 - Update auf Pay Page v2
 

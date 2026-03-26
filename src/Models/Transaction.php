@@ -9,6 +9,8 @@ use Plenty\Modules\Plugin\DataBase\Contracts\Model;
  *
  * @property int $id
  * @property string $unzerPaymentId
+ * @property string $unzerPaypageId
+ * we use unzerShortId for the payPageId
  * @property string $unzerShortId
  * @property string $time
  * @property float $amount
@@ -21,6 +23,7 @@ class Transaction extends Model
 {
     public $id = 0;
     public $unzerPaymentId = '';
+    public $unzerPaypageId = '';
     public $unzerShortId = '';
     public $time = '';
     public $amount = 0.0;

@@ -31,15 +31,19 @@ class SystemController extends Controller
         return 'done';
     }
 
-    public function test(): string
-    {
-        $this->log(__CLASS__, __METHOD__, 'start');
-        $action = $this->request->get('action');
-        $parameters = $this->request->all();
-        $apiService = pluginApp(ApiService::class);
-        $response = $apiService->call($action, $parameters);
-        return json_encode($response, JSON_PRETTY_PRINT);
+//    public function test(): string
+//    {
+//        $this->log(__CLASS__, __METHOD__, 'start');
+//        $action = $this->request->get('action');
+//        $parameters = $this->request->all();
+//        $apiService = pluginApp(ApiService::class);
+//        $response = $apiService->call($action, $parameters);
+//        return json_encode($response, JSON_PRETTY_PRINT);
+//
+//    }
 
+    public function applePayDomainVerification(){
+        return '7b2276657273696f6e223a312c227073704964223a2244303134343945313932433041444436323041333641443243393834373337433245313930423230333138343431393437433743423736364338344534323638222c22637265617465644f6e223a313731383839323737333837377d';
     }
 
     public function getTable(TransactionRepositoryContract $transactionRepository)

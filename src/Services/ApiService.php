@@ -3,6 +3,7 @@
 namespace UnzerPayment\Services;
 
 use Plenty\Modules\Plugin\Libs\Contracts\LibraryCallContract;
+use UnzerPayment\Repositories\UnzerDataRepository;
 use UnzerPayment\Traits\LoggingTrait;
 use UnzerPayment\Traits\TranslationTrait;
 
@@ -19,23 +20,29 @@ class ApiService
     public const STATE_NAME_CHARGEBACK = 'chargeback';
     public const STATE_NAME_CREATE = 'create';
 
-    public static ?array $paymentTypes = null;
+    private ?array $paymentTypes = null;
 
 
     private ConfigService $configService;
-    private ApiService $apiService;
+    private UnzerDataRepository $unzerDataRepository;
 
-    public function __construct(ConfigService $configService)
+    public function __construct(
+        ConfigService       $configService,
+        UnzerDataRepository $unzerDataRepository,
+    )
     {
         $this->configService = $configService;
+        $this->unzerDataRepository = $unzerDataRepository;
     }
 
     public function call(string $action, array $parameters): array
     {
-        $this->log(__CLASS__, __METHOD__, 'start', '', [
-            'action' => $action,
-            'parameters' => $parameters,
-        ]);
+        if (!in_array($action, ['getAvailablePaymentTypes'], true)) {
+            $this->log(__CLASS__, __METHOD__, 'start', '', [
+                'action' => $action,
+                'parameters' => $parameters,
+            ]);
+        }
 
         $sdkClient = pluginApp(LibraryCallContract::class);
         $startTime = microtime(true);
@@ -51,15 +58,16 @@ class ApiService
         );
         $endTime = microtime(true);
         $duration = $endTime - $startTime;
-
-        $this->log(__CLASS__, __METHOD__, 'result', '', [
-            'startTime' => $startTime,
-            'endTime' => $endTime,
-            'duration' => $duration,
-            'action' => $action,
-            'parameters' => ($action === 'createPayPage' ? ['too many for paypage'] : $parameters),
-            'result' => $result,
-        ]);
+        if (!in_array($action, ['getAvailablePaymentTypes'], true)) {
+            $this->log(__CLASS__, __METHOD__, 'result', '', [
+                'startTime' => $startTime,
+                'endTime' => $endTime,
+                'duration' => $duration,
+                'action' => $action,
+                'parameters' => ($action === 'createPayPage' ? ['too many for paypage'] : $parameters),
+                'result' => $result,
+            ]);
+        }
         if ($action === 'createPayPage') {
             $this->log(__CLASS__, __METHOD__, 'parameters', '', [
                 'parameters' => $parameters,
@@ -100,11 +108,29 @@ class ApiService
 
     public function getAvailablePaymentTypes(): ?array
     {
-        if (empty(self::$paymentTypes)) {
-            $response = $this->call('getAvailablePaymentTypes', []);
-            self::$paymentTypes = $response['response']['paymentTypes'] ?? [];
+        if (empty($this->paymentTypes)) {
+            $keyHash = md5($this->configService->getPrivateKey());
+            try {
+                $cachedPaymentTypes = $this->unzerDataRepository->getValue('availablePaymentTypes_' . $keyHash);
+                $cachedPaymentTypesTime = $this->unzerDataRepository->getValue('availablePaymentTypesTime_' . $keyHash);
+            } catch (\Throwable $exception) {
+                $this->error(__CLASS__, __METHOD__, 'exceptionReading', '', ['msg' => $exception->getMessage()]);
+            }
+            if (!empty($cachedPaymentTypes) && !empty($cachedPaymentTypesTime) && $cachedPaymentTypesTime > (time() - 3600)) {
+                $this->paymentTypes = $cachedPaymentTypes;
+            } else {
+                $this->log(__CLASS__, __METHOD__, 'notFromCache', '', ['types' => '']);
+                $response = $this->call('getAvailablePaymentTypes', []);
+                $this->paymentTypes = $response['response']['paymentTypes'] ?? [];
+                try {
+                    $this->unzerDataRepository->setValue('availablePaymentTypes_' . $keyHash, $this->paymentTypes);
+                    $this->unzerDataRepository->setValue('availablePaymentTypesTime_' . $keyHash, time());
+                } catch (\Throwable $exception) {
+                    $this->error(__CLASS__, __METHOD__, 'exceptionWriting', '', ['msg' => $exception->getMessage()]);
+                }
+            }
         }
-        return self::$paymentTypes;
+        return $this->paymentTypes;
     }
 
     public function createWebhook(string $url): ?array
@@ -116,6 +142,30 @@ class ApiService
         return $response['response']['webhooks'] ?? null;
     }
 
+    /**
+     * Pay page for payment after order creation
+     * @param array $checkoutData
+     * @param string|null $reference
+     * @param string|null $paymentTypeCode (might be pipe separated list)
+     * @return array|null
+     */
+    public function createPayPageNew(array $checkoutData, ?string $reference = null, ?string $paymentTypeCode = null): ?array
+    {
+        $response = $this->call('createPayPage', [
+            'checkoutData' => $checkoutData,
+            'shopVersion' => $this->configService->getShopVersion(),
+            'pluginVersion' => $this->configService->getPluginVersion(),
+            'returnUrl' => $this->configService->getPayReturnUrl($reference, $checkoutData['orderId'] ?? null),
+            'orderReference' => $reference,
+            'paymentTypeCode' => $paymentTypeCode,
+            'bookingMode' => $this->configService->getBookingMode($paymentTypeCode),
+        ]);
+        return $response['response']['payPage'] ?? null;
+    }
+
+    /**
+     * Pay page for payment before order creation
+     */
     public function createPayPage(array $checkoutData, ?string $reference = null, ?string $paymentTypeCode = null): ?array
     {
         $response = $this->call('createPayPage', [
@@ -123,8 +173,10 @@ class ApiService
             'shopVersion' => $this->configService->getShopVersion(),
             'pluginVersion' => $this->configService->getPluginVersion(),
             'returnUrl' => $this->configService->getReturnUrl($reference),
+            'orderReference' => $reference,
+            'checkoutUrl' => $this->configService->getShopCheckoutUrl(),
             'paymentTypeCode' => $paymentTypeCode,
-            'bookingMode' => $this->configService->getBookingMode(),
+            'bookingMode' => $this->configService->getBookingMode($paymentTypeCode),
         ]);
         return $response['response']['payPage'] ?? null;
     }

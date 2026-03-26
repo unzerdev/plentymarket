@@ -121,4 +121,15 @@ class PaymentMethodService
 
         return false;
     }
+
+    public function getPaymentMethodDataFromUnzerPaymentTypeId(string $unzerPaymentTypeId): ?array{
+        $parts = explode('-', $unzerPaymentTypeId);
+        $shortCode = $parts[1];
+        foreach(Constants::PAYMENT_METHODS as $paymentMethod){
+            if($paymentMethod['short_code'] === $shortCode){
+                return $paymentMethod;
+            }
+        }
+        return null;
+    }
 }
