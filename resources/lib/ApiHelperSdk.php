@@ -9,6 +9,7 @@ use UnzerSDK\Resources\Basket;
 use UnzerSDK\Resources\Customer;
 use UnzerSDK\Resources\EmbeddedResources\Address;
 use UnzerSDK\Resources\EmbeddedResources\BasketItem;
+use UnzerSDK\Resources\EmbeddedResources\CompanyInfo;
 use UnzerSDK\Resources\EmbeddedResources\Paypage\PaymentMethodConfig;
 use UnzerSDK\Resources\EmbeddedResources\Paypage\PaymentMethodsConfigs;
 use UnzerSDK\Resources\EmbeddedResources\Paypage\Resources;
@@ -47,6 +48,13 @@ class ApiHelperSdk
     {
         $payment = $this->getUnzerObject()->fetchPayment($paymentId);
         $returnValues = $payment->expose();
+        $returnValues['orderId'] = $payment->getOrderId();
+        $paymentType = $payment->getPaymentType();
+        $returnValues['paymentType'] = [
+            'id' => $paymentType->getId(),
+            'attributes' => $paymentType->getAdditionalAttributes(),
+        ];
+        $returnValues['basketOrderId'] = $payment->getBasket()?->getOrderId();
         $amount = $payment->getAmount();
         $returnValues['amount'] = [
             'total' => $amount->getTotal(),
@@ -55,6 +63,40 @@ class ApiHelperSdk
             'remaining' => $amount->getRemaining(),
             'currency' => $amount->getCurrency(),
         ];
+
+        $returnValues['charges'] = [];
+        foreach ($payment->getCharges() as $charge) {
+            $returnValues['charges'][] = [
+                'amount' => $charge->getAmount(),
+                'currency' => $charge->getCurrency() ?? $payment->getCurrency(),
+                'isSuccess' => $charge->isSuccess(),
+                'id' => $charge->getId(),
+            ];
+        }
+        try {
+            if ($authorization = $payment->getAuthorization()) {
+                $returnValues['authorization'] = [
+                    'id' => $authorization->getId(),
+                    'isSuccess' => $authorization->isSuccess(),
+                    'isPending' => $authorization->isPending(),
+                    'amount'=>$authorization->getAmount(),
+                    'currency'=>$authorization->getCurrency(),
+                ];
+            }
+
+        } catch (Throwable $e) {
+            self::$warnings[] = 'Exception in getAuthorization: ' . $e->getMessage();
+        }
+        $returnValues['refunds'] = [];
+        foreach ($payment->getRefunds() as $refund) {
+            $returnValues['refunds'][] = [
+                'amount' => $refund->getAmount(),
+                'currency' => $refund->getCurrency() ?? $payment->getCurrency(),
+                'isSuccess' => $refund->isSuccess(),
+                'id' => $refund->getId(),
+            ];
+        }
+
         $customer = $payment->getCustomer();
         $returnValues['customer'] = [
             'email' => $customer ? $customer->getEmail() : '',
@@ -100,9 +142,18 @@ class ApiHelperSdk
         return $result;
     }
 
-    public function createPayPage(array $checkoutData, string $returnUrl, ?string $paymentTypeCode = null, $bookingMode = 'charge'): array
+    /**
+     * @param array $checkoutData
+     * @param string $returnUrl
+     * @param string|null $cancelUrl
+     * @param string $orderReference
+     * @param string|null $paymentTypeCode (might be pip separated list)
+     * @param $bookingMode
+     * @return array
+     */
+    public function createPayPage(array $checkoutData, string $returnUrl, ?string $cancelUrl, string $orderReference, ?string $paymentTypeCode = null, $bookingMode = 'charge'): array
     {
-        $basket = $this->getBasket($checkoutData);
+        $basket = $this->getBasket($checkoutData, $orderReference);
         $customer = $this->getCustomer($checkoutData);
         $metaData = $this->getMetaData();
 
@@ -111,6 +162,7 @@ class ApiHelperSdk
         }
         $payPage = (new Paypage($basket->getTotalValueGross(), $basket->getCurrencyCode(), $bookingMode))
             ->setType('embedded')
+            ->setOrderId((string)($checkoutData['orderId'] ?? $basket->getOrderId()))
             ->setCheckoutType('payment_only')
             ->setUrls(
                 (new Urls())
@@ -123,18 +175,21 @@ class ApiHelperSdk
         $isCustomerLoggedIn = !empty($checkoutData['basket']['customerId']);
 
         if ($paymentTypeCode) {
+            $paymentTypeCodeList = array_filter(array_map('trim', explode('|', $paymentTypeCode)));
             $config = new PaymentMethodsConfigs();
             $config->setDefault((new PaymentMethodConfig())->setEnabled(false));
-            $paymentType = ResourceService::getTypeInstanceFromIdString('s-' . $paymentTypeCode . '-0');
-            $selectedPaymentMethodConfig = (new PaymentMethodConfig())->setEnabled(true);
-            $classNameOfSelectedPaymentMethod = get_class($paymentType);
-            if (stripos($classNameOfSelectedPaymentMethod, 'OpenbankingPis') !== false) {
-                $classNameOfSelectedPaymentMethod = strtolower($classNameOfSelectedPaymentMethod);
+            foreach ($paymentTypeCodeList as $paymentTypeCodeListItem) {
+                $paymentType = ResourceService::getTypeInstanceFromIdString('s-' . $paymentTypeCodeListItem . '-0');
+                $selectedPaymentMethodConfig = (new PaymentMethodConfig())->setEnabled(true);
+                $classNameOfSelectedPaymentMethod = get_class($paymentType);
+                if (stripos($classNameOfSelectedPaymentMethod, 'OpenbankingPis') !== false) {
+                    $classNameOfSelectedPaymentMethod = strtolower($classNameOfSelectedPaymentMethod);
+                }
+                if ($isCustomerLoggedIn && in_array($classNameOfSelectedPaymentMethod, [Card::class, SepaDirectDebit::class, Paypal::class], true)) {
+                    $selectedPaymentMethodConfig->setCredentialOnFile(true);
+                }
+                $config->addMethodConfig($classNameOfSelectedPaymentMethod, $selectedPaymentMethodConfig);
             }
-            if ($isCustomerLoggedIn && in_array($classNameOfSelectedPaymentMethod, [Card::class, SepaDirectDebit::class, Paypal::class], true)) {
-                $selectedPaymentMethodConfig->setCredentialOnFile(true);
-            }
-            $config->addMethodConfig($classNameOfSelectedPaymentMethod, $selectedPaymentMethodConfig);
             $payPage->setPaymentMethodsConfigs($config);
         }
 
@@ -151,6 +206,8 @@ class ApiHelperSdk
         $returnValues['payPageId'] = $payPage->getId();
         $returnValues['amount'] = $payPage->getAmount();
         $returnValues['currency'] = $payPage->getCurrency();
+        $returnValues['customer'] = $customer->expose();
+
 
         return $returnValues;
     }
@@ -185,12 +242,27 @@ class ApiHelperSdk
         }
 
         $billingAddress = $checkoutData['billingAddress'] ?? [];
+        $companyName = $billingAddress['name1'] ?? '';
         $customer
             ->setFirstname($billingAddress['name2'] ?? '')
             ->setLastname($billingAddress['name3'] ?? '')
             ->setPhone('')
-            ->setCompany($billingAddress['name1'] ?? '')
+            ->setLanguage('en') // TODO
+            ->setCompany($companyName)
             ->setEmail(self::getOption($billingAddress['options'] ?? [], self::PLENTY_ADDRESS_OPTION_EMAIL) ?? '');
+
+        if(!empty($companyName)){
+            $companyInfo = $customer->getCompanyInfo();
+            if(empty($companyInfo) || empty($companyInfo->getCompanyType())){
+                $companyInfo = (new CompanyInfo())
+                    ->setCompanyType('Company Type')
+                    ->setRegistrationType('not_registered')
+                    ->setFunction('OWNER')
+                    ->setCommercialSector('OTHER');
+                $customer->setCompanyInfo($companyInfo);
+
+            }
+        }
 
         $this->setAddresses($customer, $checkoutData);
 
@@ -238,14 +310,14 @@ class ApiHelperSdk
     }
 
 
-    public function getBasket(array $checkoutData): Basket
+    public function getBasket(array $checkoutData, string $orderReference): Basket
     {
         $basketData = $checkoutData['basket'] ?? [];
         $isNet = (bool)$basketData['isNet'];
         $totalValue = $isNet ? ($basketData['basketAmountNet'] ?? 0) : ($basketData['basketAmount'] ?? 0);
         $basket = (new Basket())
             ->setTotalValueGross((float)$totalValue)
-            ->setOrderId(uniqid())
+            ->setOrderId($orderReference)
             ->setCurrencyCode($basketData['currency'] ?? '');
 
         $basketItems = [];
@@ -253,13 +325,16 @@ class ApiHelperSdk
         // Process each basket item.
         foreach ($checkoutData['basketItems'] as $itemData) {
             $itemPrice = $isNet ? ($itemData['priceNet'] ?? 0) : ($itemData['price'] ?? 0);
-            $itemVat = $isNet ? 0 : ($itemData['vat'] ?? 0);
+            $itemVatAbs = $isNet ? 0 : ($itemData['vat'] ?? 0);
+            $itemPriceNet = $itemPrice - $itemVatAbs;
+            $itemVat = ($itemPriceNet > 0) ? ($itemVatAbs / $itemPriceNet) * 100 : 0;
+            $name = $itemData['name'] ?? $itemData['variation_data']['data']['texts']['name1'] ?? $itemData['variationId'] . '_' . uniqid();
             $item = (new BasketItem())
-                ->setTitle(uniqid()) // TODO: Replace with proper title if available.
+                ->setTitle($name)
                 ->setQuantity((int)($itemData['quantity'] ?? 1))
                 ->setType(BasketItemTypes::GOODS)
                 ->setAmountPerUnitGross(round((float)$itemPrice, 2))
-                ->setVat((float)$itemVat);
+                ->setVat(round((float)$itemVat, 2));
             $basketItems[] = $item;
         }
 
@@ -314,8 +389,27 @@ class ApiHelperSdk
 
     public function refund(string $paymentId, float $amount): array
     {
-        $cancellations = $this->getUnzerObject()->cancelPayment($paymentId, $amount);
-        return $this->normalizeCancellationArray($cancellations);
+        try {
+            $cancellations = $this->getUnzerObject()->cancelPayment($paymentId, $amount);
+        } catch (Exception $e) {
+            static::$warnings[] = 'Cancellation first attempt failed: ' . $e->getMessage();
+            try {
+                $cancellation = new Cancellation($amount);
+                $createdCancellation = $this->getUnzerObject()->cancelChargedPayment($paymentId, $cancellation);
+                $cancellations = [$createdCancellation];
+            } catch (Exception $e) {
+                static::$warnings[] = 'Cancellation second attempt failed: ' . $e->getMessage();
+                try {
+                    $cancellation = new Cancellation($amount);
+                    $createdCancellation = $this->getUnzerObject()->cancelAuthorizedPayment($paymentId, $cancellation);
+                    $cancellations = [$createdCancellation];
+                } catch (Exception $e) {
+                    static::$warnings[] = 'Cancellation third attempt failed: ' . $e->getMessage();
+                }
+            }
+
+        }
+        return $this->normalizeCancellationArray($cancellations ?? []);
     }
 
     protected function normalizeCancellationArray(array $cancellations): array
@@ -329,14 +423,20 @@ class ApiHelperSdk
             $data['success'] = $cancellation->isSuccess();
             $data['error'] = $cancellation->isError();
             $data['pending'] = $cancellation->isPending();
+            try {
+                $data['parentId'] = $cancellation->getParentResource()->getId();
+                $data['parentIsCharge'] = $cancellation->getParentResource() instanceof Charge;
+            } catch (Exception $e) {
+                self::$warnings[] = '$cancellation->getParentResource() failed: ' . $e->getMessage();
+            }
             $normalized[] = $data;
         }
         return $normalized;
     }
 
-    public function charge(?string $paymentId, float $amount): void
+    public function charge(?string $paymentId, float $amount): Charge
     {
-        $this->getUnzerObject()->performChargeOnPayment($paymentId, new Charge($amount));
+        return $this->getUnzerObject()->performChargeOnPayment($paymentId, new Charge($amount));
     }
 
     public static function getOption(array $options, int $typeId): ?string
@@ -357,8 +457,9 @@ class ApiHelperSdk
             $payment = $payPage->getPayments()[0];
         }
         return $payPage->expose() + [
-                'payment' => $payment->expose(),
-                'paymentId' => $payment->getPaymentId(),
+                'payment' => $payment?->expose(),
+                'paymentId' => $payment?->getPaymentId(),
+                'paymentCount' => is_array($payPage->getPayments()) ? count($payPage->getPayments()) : 0,
             ];
     }
 

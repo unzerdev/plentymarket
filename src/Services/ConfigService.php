@@ -53,10 +53,23 @@ class ConfigService
         return $this->getAbsoluteUrl($this->getShopCheckoutUrlRelative());
     }
 
+    public function getShopConfirmationUrl(): string
+    {
+        return $this->getAbsoluteUrl($this->getShopConfirmationUrlRelative());
+    }
+
+
+
     public function getShopCheckoutUrlRelative(): string
     {
         $shopUrls = pluginApp(ShopUrls::class);
         return (string)$shopUrls->checkout;
+    }
+
+    public function getShopConfirmationUrlRelative(): string
+    {
+        $shopUrls = pluginApp(ShopUrls::class);
+        return (string)$shopUrls->confirmation;
     }
 
     public function getLocale(): ?string
@@ -112,14 +125,48 @@ class ConfigService
         return (string)$this->getConfigurationValue('publicKey');
     }
 
-    public function getBookingMode(): string
+    public function getBookingMode(?string $paymentTypeCode): string
     {
-        return (string)$this->getConfigurationValue('bookingMode');
+        $response = null;
+        switch ($paymentTypeCode) {
+            case 'apl':
+                $response = (string)$this->getConfigurationValue('bookingModeApplePay');
+                break;
+            case 'crd':
+                $response = (string)$this->getConfigurationValue('bookingModeCard');
+                break;
+            case 'gop':
+                $response = (string)$this->getConfigurationValue('bookingModeGooglePay');
+            case 'ppl':
+                $response = (string)$this->getConfigurationValue('bookingModePaypal');
+                break;
+            case 'wro':
+                $response = 'charge'; //(string)$this->getConfigurationValue('bookingModeWero');
+                break;
+        }
+        return in_array($response, ['charge', 'authorize'])?$response:'charge';
+    }
+
+    public function getPayUrl($orderId, $orderAccessKey, $allMethods = false): ?string
+    {
+        return $this->getUrl('payment/unzer-pay').'?orderId='.$orderId.'&orderAccessKey='.$orderAccessKey.($allMethods?'&allMethods=1':'');
     }
 
     public function getWebhookUrl(): ?string
     {
         return $this->getUrl('payment/unzer-webhook');
+    }
+
+    public function getPayReturnUrl(?string $reference = null, $orderId = null): ?string
+    {
+        $url = $this->getUrl('payment/unzer-checkout-pay-return');
+        if (!empty($reference)) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . 'reference=' . $reference;
+        }
+        if (!empty($orderId)) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . 'orderId=' . $orderId;
+        }
+        return $url;
     }
 
     public function getReturnUrl(?string $reference = null): ?string
@@ -128,6 +175,19 @@ class ConfigService
         if (!empty($reference)) {
             $url .= (strpos($url, '?') === false ? '?' : '&') . 'reference=' . $reference;
         }
+        return $url;
+    }
+
+    public function getCancelUrl(): ?string
+    {
+        $url = $this->getUrl('payment/unzer-checkout-cancel');
+        $url .= (strpos($url, '?') === false ? '?' : '&') . 'error-src=js';
+        return $url;
+    }
+
+    public function getCheckoutErrorUrl(): ?string
+    {
+        $url = $this->getUrl('payment/unzer-checkout-error');
         return $url;
     }
 }

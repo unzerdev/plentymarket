@@ -9,6 +9,7 @@ use UnzerPayment\Repositories\TransactionRepository;
 use UnzerPayment\Services\ApiService;
 use UnzerPayment\Services\ConfigService;
 use UnzerPayment\Services\OrderService;
+use UnzerPayment\Services\TransactionService;
 use UnzerPayment\Traits\LoggingTrait;
 
 class WebhookController extends Controller
@@ -60,7 +61,8 @@ class WebhookController extends Controller
         $transactionRepository = pluginApp(TransactionRepository::class);
         $transaction = $transactionRepository->getTransactionByUnzerPaymentId($data['paymentId']);
         if (empty($transaction)) {
-            $transaction = $transactionRepository->persistUnzerPayment($payment);
+            $transactionService = pluginApp(TransactionService::class);
+            $transaction = $transactionService->persistUnzerPayment($payment);
         }
 
         if ($transaction) {

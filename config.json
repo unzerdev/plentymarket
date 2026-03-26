@@ -1,52 +1,111 @@
 {
-  "formatVersion": 1,
-  "menu": {
-    "Config.credentialsTab": {
-      "label": "Config.credentialsTab",
-      "formFields": {
-        "publicKey": {
-          "type": "inputText",
-          "required": false,
-          "label": "Config.publicKeyLabel",
-          "options": {
-            "defaultValue": ""
-          }
+    "formatVersion": 1,
+    "menu": {
+        "Config.credentialsTab": {
+            "label": "Config.credentialsTab",
+            "formFields": {
+                "publicKey": {
+                    "type": "inputText",
+                    "required": false,
+                    "label": "Config.publicKeyLabel",
+                    "options": {
+                        "defaultValue": ""
+                    }
+                },
+                "privateKey": {
+                    "type": "inputText",
+                    "required": false,
+                    "label": "Config.privateKeyLabel",
+                    "options": {
+                        "defaultValue": ""
+                    }
+                },
+                "useExternalOrderMatching": {
+                    "type": "checkBox",
+                    "required": false,
+                    "label": "Config.useExternalOrderMatchingLabel",
+                    "options": {
+                        "defaultValue": "false"
+                    }
+                }
+            }
         },
-        "privateKey": {
-          "type": "inputText",
-          "required": false,
-          "label": "Config.privateKeyLabel",
-          "options": {
-            "defaultValue": ""
-          }
-        },
-        "bookingMode": {
-          "type": "selectBox",
-          "required": false,
-          "label": "Config.bookingModeLabel",
-          "options": {
-            "defaultValue": "capture",
-            "selectBoxValues": [
-              {
-                "value": "charge",
-                "caption": "Config.bookingModeChargeLabel"
-              },
-              {
-                "value": "authorize",
-                "caption": "Config.bookingModeAuthorizeLabel"
-              }
-            ]
-          }
-        },
-        "useExternalOrderMatching": {
-          "type": "checkBox",
-          "required": false,
-          "label": "Config.useExternalOrderMatchingLabel",
-          "options": {
-            "defaultValue": "false"
-          }
+        "Config.bookingModeTab": {
+            "label": "Config.bookingModeTab",
+            "formFields": {
+                "bookingModePaypal": {
+                    "type": "selectBox",
+                    "required": false,
+                    "label": "Config.bookingModePaypalLabel",
+                    "options": {
+                        "defaultValue": "charge",
+                        "selectBoxValues": [
+                            {
+                                "value": "charge",
+                                "caption": "Config.bookingModeChargeLabel"
+                            },
+                            {
+                                "value": "authorize",
+                                "caption": "Config.bookingModeAuthorizeLabel"
+                            }
+                        ]
+                    }
+                },
+                "bookingModeCard": {
+                    "type": "selectBox",
+                    "required": false,
+                    "label": "Config.bookingModeCardLabel",
+                    "options": {
+                        "defaultValue": "charge",
+                        "selectBoxValues": [
+                            {
+                                "value": "charge",
+                                "caption": "Config.bookingModeChargeLabel"
+                            },
+                            {
+                                "value": "authorize",
+                                "caption": "Config.bookingModeAuthorizeLabel"
+                            }
+                        ]
+                    }
+                },
+                "bookingModeGooglePay": {
+                    "type": "selectBox",
+                    "required": false,
+                    "label": "Config.bookingModeGooglePayLabel",
+                    "options": {
+                        "defaultValue": "charge",
+                        "selectBoxValues": [
+                            {
+                                "value": "charge",
+                                "caption": "Config.bookingModeChargeLabel"
+                            },
+                            {
+                                "value": "authorize",
+                                "caption": "Config.bookingModeAuthorizeLabel"
+                            }
+                        ]
+                    }
+                },
+                "bookingModeApplePay": {
+                    "type": "selectBox",
+                    "required": false,
+                    "label": "Config.bookingModeApplePayLabel",
+                    "options": {
+                        "defaultValue": "charge",
+                        "selectBoxValues": [
+                            {
+                                "value": "charge",
+                                "caption": "Config.bookingModeChargeLabel"
+                            },
+                            {
+                                "value": "authorize",
+                                "caption": "Config.bookingModeAuthorizeLabel"
+                            }
+                        ]
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }

@@ -73,15 +73,19 @@ class RefundProcedure
             $order = $orderService->getOrder($orderId);
             foreach ($cancellations as $cancellation) {
                 $this->log(__CLASS__, __METHOD__, 'cancellation', '', ['cancellation' => $cancellation]);
+
+                $isBooked = $cancellation['success'] && stripos($cancellation['parentId']??'', 's-aut') === false;
+
+
                 $refundObject = $orderService->createPaymentObject(
                     $amount,
                     $cancellation['success'] ? Payment::STATUS_REFUNDED : Payment::STATUS_REFUSED,
-                    $cancellation['id'],
+                    $transaction->unzerPaymentId. '--'.$cancellation['id'],
                     $order->methodOfPaymentId,
                     'Event Procedure Refund',
                     null,
                     Payment::PAYMENT_TYPE_DEBIT,
-                    $cancellation['success'] ? Payment::TRANSACTION_TYPE_BOOKED_POSTING : Payment::TRANSACTION_TYPE_PROVISIONAL_POSTING,
+                    $isBooked ? Payment::TRANSACTION_TYPE_BOOKED_POSTING : Payment::TRANSACTION_TYPE_PROVISIONAL_POSTING,
                     $transaction->currency
                 );
                 $orderService->assignPlentyPaymentToPlentyOrder($refundObject, $procedureOrderObject);

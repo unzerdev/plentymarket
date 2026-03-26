@@ -1,0 +1,18 @@
+{% extends getPartial('page-design') %}
+{% import "Ceres::PageDesign.Macros.LayoutContainer" as LayoutContainer %}
+
+{% block PageBody %}
+    <style>
+        .modal-content{
+            width:0 !important;
+            height: 0 !important;
+        }
+        header#page-header{
+            z-index:999 !important;
+        }
+    </style>
+    <script type="module" src="https://static-v2.unzer.com/v2/ui-components/index.js"></script>
+    <div class="container-max">
+        {{ output|raw }}
+    </div>
+{% endblock %}

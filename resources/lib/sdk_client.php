@@ -1,4 +1,7 @@
 <?php
+
+use UnzerSDK\Exceptions\UnzerApiException;
+
 require_once __DIR__ . '/ApiHelperSdk.php';
 
 $return = [
@@ -38,6 +41,8 @@ try {
             $return['response']['payPage'] = $apiHelper->createPayPage(
                 SdkRestApi::getParam('checkoutData'),
                 SdkRestApi::getParam('returnUrl'),
+                SdkRestApi::getParam('checkoutUrl')??null,
+                SdkRestApi::getParam('orderReference'),
                 SdkRestApi::getParam('paymentTypeCode'),
                 SdkRestApi::getParam('bookingMode'),
             );
@@ -50,10 +55,13 @@ try {
             $return['response']['cancellations'] = $cancellations;
             break;
         case 'charge':
-            $apiHelper->charge(
+            $return['response']['startLog'] = 1;
+            $charge = $apiHelper->charge(
                 SdkRestApi::getParam('paymentId'),
                 SdkRestApi::getParam('amount')
             );
+            $return['response']['afterLog'] = 1;
+            $return['response']['charge'] = $charge->expose();
             break;
     }
     $endTime = microtime(true);
@@ -67,6 +75,14 @@ try {
         'line' => $e->getLine(),
         'file' => $e->getFile(),
     ];
+
+    if($e instanceof UnzerApiException){
+        $return['exception']['code'] = $e->getCode();
+        $return['exception']['errorId'] = $e->getErrorId();
+        $return['exception']['clientMessage'] = $e->getClientMessage();
+        $return['exception']['merchantMessage'] = $e->getMerchantMessage();
+        $return['exception']['trace'] = $e->getTraceAsString();
+    }
 }
 
 if(!empty(ApiHelperSdk::$warnings)){

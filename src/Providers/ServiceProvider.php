@@ -2,8 +2,9 @@
 
 namespace UnzerPayment\Providers;
 
+use AmazonPayCheckout\Helpers\ConfigHelper;
+use AmazonPayCheckout\Providers\DataProviderJavascript;
 use Ceres\Helper\LayoutContainer;
-use Plenty\Modules\Basket\Contracts\BasketItemRepositoryContract;
 use Plenty\Modules\Basket\Contracts\BasketRepositoryContract;
 use Plenty\Modules\Basket\Events\Basket\AfterBasketChanged;
 use Plenty\Modules\Basket\Events\Basket\AfterBasketCreate;
@@ -13,7 +14,6 @@ use Plenty\Modules\Basket\Events\BasketItem\AfterBasketItemUpdate;
 use Plenty\Modules\Cron\Services\CronContainer;
 use Plenty\Modules\EventProcedures\Services\Entries\ProcedureEntry;
 use Plenty\Modules\EventProcedures\Services\EventProceduresService;
-use Plenty\Modules\Frontend\Contracts\Checkout;
 use Plenty\Modules\Frontend\Events\FrontendCustomerAddressChanged;
 use Plenty\Modules\Frontend\Events\FrontendLanguageChanged;
 use Plenty\Modules\Frontend\Events\FrontendShippingCountryChanged;
@@ -23,22 +23,22 @@ use Plenty\Modules\Payment\Method\Contracts\PaymentMethodContainer;
 use Plenty\Modules\Webshop\Contracts\SessionStorageRepositoryContract;
 use Plenty\Plugin\Events\Dispatcher;
 use Plenty\Plugin\ServiceProvider as ServiceProviderParent;
+use Plenty\Plugin\Templates\Twig;
 use UnzerPayment\Constants\Constants;
 use UnzerPayment\Contracts\TransactionRepositoryContract;
 use UnzerPayment\CronHandlers\ExternalOrderMatcherCronHandler;
-use UnzerPayment\Models\Transaction;
 use UnzerPayment\Repositories\TransactionRepository;
 use UnzerPayment\Services\ApiService;
-use UnzerPayment\Services\CheckoutService;
 use UnzerPayment\Services\ConfigService;
 use UnzerPayment\Services\OrderService;
 use UnzerPayment\Services\PaymentMethodService;
-use UnzerPayment\Services\TransactionService;
 use UnzerPayment\Traits\LoggingTrait;
+use UnzerPayment\Traits\TranslationTrait;
 
 class ServiceProvider extends ServiceProviderParent
 {
     use LoggingTrait;
+    use TranslationTrait;
 
     const PLUGIN_NAME = 'UnzerPayment';
 
@@ -95,7 +95,9 @@ class ServiceProvider extends ServiceProviderParent
 
     protected function registerPaymentMethods(PaymentMethodContainer $payContainer): void
     {
-        foreach (Constants::PAYMENT_METHODS as $paymentMethod) {
+        $paymentMethods = Constants::PAYMENT_METHODS;
+        uasort($paymentMethods, fn($a, $b) => $a['sort_order'] <=> $b['sort_order']);
+        foreach ($paymentMethods as $paymentMethod) {
             if ($paymentMethod['status'] !== 1) {
                 continue;
             }
@@ -132,87 +134,7 @@ class ServiceProvider extends ServiceProviderParent
                 if (!$paymentMethodService->isUnzerPaymentMethod((int)$event->getMop())) {
                     return;
                 }
-                $paymentMethodData = $paymentMethodService->getPaymentMethodData((int)$event->getMop());
-
-                $plentyCheckout = pluginApp(Checkout::class);
-                $checkoutService = pluginApp(CheckoutService::class);
-                $basketRepository = pluginApp(BasketRepositoryContract::class);
-                $basketItemRepository = pluginApp(BasketItemRepositoryContract::class);
-                $configService = pluginApp(ConfigService::class);
-
-                $basketItems = [];
-                foreach ($basketItemRepository->all() as $basketItem) {
-                    $basketItems[] = $basketItem->toArray();
-                }
-                $reference = 'tmp-unzer-checkout-' . uniqid();
-                $payPage = $checkoutService->createUnzerPayPageFromBasket($basketRepository->load(), $basketItems, $plentyCheckout, $paymentMethodData, $reference);
-
-                $publicKey = $configService->getPublicKey();
-
-                $checkoutPageUrl = $configService->getShopCheckoutUrl();
-                $returnUrl = $configService->getReturnUrl($reference);
-                $locale = $configService->getLocale();
-                if ($payPage) {
-                    $transactionService = pluginApp(TransactionService::class);
-                    $transaction = pluginApp(Transaction::class);
-                    $transaction->unzerPaymentId = $payPage['id'];
-                    $transaction->amount = $payPage['amount'];
-                    $transaction->currency = $payPage['currency'];
-                    $transaction->reference = $reference;
-                    $transactionService->upsertTransaction($transaction);
-
-                    $html = '
-<style>
-.modal-content{
-width:0 !important;
-height: 0 !important;
-}
-</style>
-
-<!-- temporary style -->
-<style>
-#unzer-payment, #unzer-pay-page{
-    position: fixed;
-    top:0;
-    left:0;
-    bottom:0;
-    right:0;
-    z-index:900;
-}
-</style>
-<script type="module" src="https://static-v2.unzer.com/v2/ui-components/index.js"></script>
-<unzer-payment publicKey="' . $publicKey . '" locale="' . $locale . '" id="unzer-payment">
-    <unzer-pay-page payPageId="' . $payPage['id'] . '" id="unzer-pay-page"></unzer-pay-page>
-</unzer-payment>
-<script>
-    Promise.all([
-        customElements.whenDefined("unzer-payment"),
-        customElements.whenDefined("unzer-pay-page"),
-    ]).then(() => {
-        const checkoutElement = document.getElementById("unzer-pay-page");
-
-        checkoutElement.abort(function () {
-            location.href = "' . $checkoutPageUrl . '";
-        });
-
-        checkoutElement.success(function () {
-            window.location.href = "' . $returnUrl . '";
-        });
-
-        checkoutElement.error(function (error) {
-            console.log(error);
-            location.href = "' . $checkoutPageUrl . '";
-        });
-
-        checkoutElement.open();
-    });
-</script>';
-                } else {
-                    $html = 'ERROR: No Pay Page';
-                }
-
-                $event->setValue($html);
-                $event->setType(GetPaymentMethodContent::RETURN_TYPE_HTML);
+                $event->setType(GetPaymentMethodContent::RETURN_TYPE_CONTINUE);
             }
         );
     }
@@ -228,38 +150,13 @@ height: 0 !important;
             if (!$paymentMethodService->isUnzerPaymentMethod((int)$event->getMop())) {
                 return;
             }
+            $this->log(__CLASS__, __METHOD__, 'execPay_start', '', ['order' => $event->getOrderId()]);
 
-            /** @var SessionStorageRepositoryContract $sessionStorageRepository */
-            $sessionStorageRepository = pluginApp(SessionStorageRepositoryContract::class);
-            $unzerPaymentId = $sessionStorageRepository->getSessionValue(Constants::SESSION_KEY_PAYMENT_ID);
-
-            if (empty($unzerPaymentId)) {
-                $event->setType('error');
-                $event->setValue('No payment id found'); //TODO
-                return;
-            }
-
-            $apiService = pluginApp(ApiService::class);
-            $payment = $apiService->getUnzerPayment($unzerPaymentId);
-            if (empty($payment)) {
-                $event->setType('error');
-                $event->setValue('No payment found'); //TODO
-                $sessionStorageRepository->setSessionValue(Constants::SESSION_KEY_PAYMENT_ID, null);
-                return;
-            }
-            if (!in_array($payment['state'], ['completed', 'pending'], true)) {
-                $event->setType('error');
-                $event->setValue('Payment not completed: ' . $payment['state']); //TODO
-                $sessionStorageRepository->setSessionValue(Constants::SESSION_KEY_PAYMENT_ID, null);
-                return;
-            }
-
+            $configService = pluginApp(ConfigService::class);
             $orderService = pluginApp(OrderService::class);
-            $orderService->syncPaymentInformation((int)$event->getOrderId(), $unzerPaymentId);
-
-            $event->setType('success');
-            $event->setValue('The payment has been executed successfully!');
-
+            $order = $orderService->getOrder($event->getOrderId());
+            $event->setType('redirectUrl');
+            $event->setValue($configService->getPayUrl($event->getOrderId(), 'x'));
         });
     }
 
@@ -269,6 +166,26 @@ height: 0 !important;
             function (LayoutContainer $container, $order) {
                 $dataProvider = pluginApp(DataProviderConfirmationPage::class);
                 $container->addContent($dataProvider->call($order));
+            });
+
+        $eventDispatcher->listen('Ceres.LayoutContainer.OrderConfirmation.AdditionalPaymentInformation',
+            function (LayoutContainer $container, $order) {
+                $dataProvider = pluginApp(DataProviderReinitializeButton::class);
+                $result = $dataProvider->call($order);
+                $container->addContent($result);
+            });
+        $eventDispatcher->listen('Ceres.LayoutContainer.Script.AfterScriptsLoaded',
+            function (LayoutContainer $container) {
+
+                $container->addContent('
+                <script>
+                    document.addEventListener(\'DOMContentLoaded\', ()=>{
+                        if(document.getElementById(\'unzer-hide-payment-method-change-link-marker\')){
+                            document.head.insertAdjacentHTML("beforeend","<style>.page-confirmation .payment-link-style{display:none}</style>");
+                        }
+                    });                    
+                </script>
+                ');
             });
     }
 }

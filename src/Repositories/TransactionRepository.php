@@ -6,6 +6,7 @@ use Exception;
 use Plenty\Modules\Plugin\DataBase\Contracts\DataBase;
 use UnzerPayment\Contracts\TransactionRepositoryContract;
 use UnzerPayment\Models\Transaction;
+use UnzerPayment\Services\TransactionService;
 use UnzerPayment\Traits\LoggingTrait;
 
 class TransactionRepository implements TransactionRepositoryContract
@@ -47,6 +48,11 @@ class TransactionRepository implements TransactionRepositoryContract
         }
     }
 
+    public function deleteTransaction(Transaction $transaction){
+        $database = pluginApp(DataBase::class);
+        return $database->delete($transaction);
+    }
+
     /**
      * @param array $criteria
      *
@@ -61,6 +67,7 @@ class TransactionRepository implements TransactionRepositoryContract
             $stmt->where($c[0], $c[1], $c[2]);
         }
 
+        $stmt->orderBy('id', 'asc');
         $result = $stmt->get();
         $this->log(__CLASS__, __METHOD__, 'result', '', ['criteria' => $criteria, 'result' => $result]);
         return $result;
@@ -120,43 +127,4 @@ class TransactionRepository implements TransactionRepositoryContract
         }
         return $return;
     }
-
-    public function persistUnzerPayment($unzerPayment, $orderId = null, $plentyPaymentId = null): ?Transaction
-    {
-        $this->log(__CLASS__, __METHOD__, 'start', '', [
-            'unzerPayment' => $unzerPayment,
-            'orderId' => $orderId,
-            'plentyPaymentId' => $plentyPaymentId,
-        ]);
-
-        $transaction = $this->getTransactionObject($unzerPayment['id']);
-        $transaction->amount = $unzerPayment['amount']['total'];
-        $transaction->currency = $unzerPayment['amount']['currency'];
-
-
-        if ($orderId) {
-            $transaction->orderId = $orderId;
-        }
-
-        if ($plentyPaymentId) {
-            $transaction->paymentId = $plentyPaymentId;
-        }
-
-        $this->saveTransaction($transaction);
-
-        return $transaction;
-    }
-
-    public function getTransactionObject(string $unzerPaymentId): Transaction
-    {
-        if ($transaction = $this->getTransactionByUnzerPaymentId($unzerPaymentId)) {
-            return $transaction;
-        } else {
-            $transaction = pluginApp(Transaction::class);
-            $transaction->unzerPaymentId = $unzerPaymentId;
-            $transaction->time = gmdate('Y-m-d H:i:s');
-        }
-        return $transaction;
-    }
-
 }

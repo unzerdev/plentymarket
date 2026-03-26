@@ -9,6 +9,8 @@ class Constants
     const PLUGIN_KEY = 'unzer_payment';
     const SESSION_KEY_PAYMENT_ID = 'unzer_payment_id';
 
+    /* conventions: array sort order == a-z; array keys == long_code */
+
     const PAYMENT_METHODS = [
         'alipay' => [
             'status' => 1,
@@ -17,6 +19,7 @@ class Constants
             'payment_method_code' => 'UNZER_ALIPAY',
             'name' => 'Unzer Alipay',
             'class_name' => 'UnzerAlipayPaymentMethod',
+            'sort_order' => 2100,
         ],
         'applepay' => [
             'status' => 1,
@@ -25,6 +28,7 @@ class Constants
             'payment_method_code' => 'UNZER_APPLEPAY',
             'name' => 'Unzer Apple Pay',
             'class_name' => 'UnzerApplepayPaymentMethod',
+            'sort_order' => 600,
         ],
         'bancontact' => [
             'status' => 1,
@@ -33,6 +37,7 @@ class Constants
             'payment_method_code' => 'UNZER_BANCONTACT',
             'name' => 'Unzer Bancontact',
             'class_name' => 'UnzerBancontactPaymentMethod',
+            'sort_order' => 1900,
         ],
         'card' => [
             'status' => 1,
@@ -41,6 +46,7 @@ class Constants
             'payment_method_code' => 'UNZER_CARD',
             'name' => 'Unzer Credit Card',
             'class_name' => 'UnzerCardPaymentMethod',
+            'sort_order' => 500,
         ],
         'eps' => [
             'status' => 1,
@@ -49,6 +55,7 @@ class Constants
             'payment_method_code' => 'UNZER_EPS',
             'name' => 'Unzer EPS',
             'class_name' => 'UnzerEpsPaymentMethod',
+            'sort_order' => 1000,
         ],
         'googlepay' => [
             'status' => 1,
@@ -57,6 +64,7 @@ class Constants
             'payment_method_code' => 'UNZER_GOOGLEPAY',
             'name' => 'Unzer Google Pay',
             'class_name' => 'UnzerGooglepayPaymentMethod',
+            'sort_order' => 700,
         ],
         'ideal' => [
             'status' => 1,
@@ -65,6 +73,7 @@ class Constants
             'payment_method_code' => 'UNZER_IDEAL',
             'name' => 'Unzer iDEAL',
             'class_name' => 'UnzerIdealPaymentMethod',
+            'sort_order' => 1100,
         ],
         'klarna' => [
             'status' => 1,
@@ -73,6 +82,7 @@ class Constants
             'payment_method_code' => 'UNZER_KLARNA',
             'name' => 'Unzer Klarna',
             'class_name' => 'UnzerKlarnaPaymentMethod',
+            'sort_order' => 900,
         ],
         'openbanking_pis' => [
             'status' => 1,
@@ -81,6 +91,7 @@ class Constants
             'payment_method_code' => 'UNZER_OPENBANKING_PIS',
             'name' => 'Unzer Open Banking',
             'class_name' => 'UnzerOpenbankingPisPaymentMethod',
+            'sort_order' => 400,
         ],
         'paypal' => [
             'status' => 1,
@@ -89,6 +100,7 @@ class Constants
             'payment_method_code' => 'UNZER_PAYPAL',
             'name' => 'Unzer PayPal',
             'class_name' => 'UnzerPaypalPaymentMethod',
+            'sort_order' => 2000,
         ],
         'payu' => [
             'status' => 1,
@@ -97,6 +109,7 @@ class Constants
             'payment_method_code' => 'UNZER_PAYU',
             'name' => 'Unzer PayU',
             'class_name' => 'UnzerPayuPaymentMethod',
+            'sort_order' => 1600,
         ],
         'paylater_direct_debit' => [
             'status' => 1,
@@ -105,6 +118,7 @@ class Constants
             'payment_method_code' => 'UNZER_PAYLATER_DIRECT_DEBIT',
             'name' => 'Unzer Paylater Direct Debit',
             'class_name' => 'UnzerPaylaterDirectDebitPaymentMethod',
+            'sort_order' => 300,
         ],
         'paylater_invoice' => [
             'status' => 1,
@@ -113,6 +127,7 @@ class Constants
             'payment_method_code' => 'UNZER_PAYLATER_INVOICE',
             'name' => 'Unzer Paylater Invoice',
             'class_name' => 'UnzerPaylaterInvoicePaymentMethod',
+            'sort_order' => 100,
         ],
         'paylater_installment' => [
             'status' => 1,
@@ -121,6 +136,7 @@ class Constants
             'payment_method_code' => 'UNZER_PAYLATER_INSTALLMENT',
             'name' => 'Unzer Paylater Installment',
             'class_name' => 'UnzerPaylaterInstallmentPaymentMethod',
+            'sort_order' => 200,
         ],
         'post_finance_card' => [
             'status' => 1,
@@ -129,6 +145,7 @@ class Constants
             'payment_method_code' => 'UNZER_POST_FINANCE_CARD',
             'name' => 'Unzer Post Finance Card',
             'class_name' => 'UnzerPostFinanceCardPaymentMethod',
+            'sort_order' => 1400,
         ],
         'post_finance_efinance' => [
             'status' => 1,
@@ -137,6 +154,7 @@ class Constants
             'payment_method_code' => 'UNZER_POST_FINANCE_EFINANCE',
             'name' => 'Unzer Post Finance eFinance',
             'class_name' => 'UnzerPostFinanceEfinancePaymentMethod',
+            'sort_order' => 1500,
         ],
         'prepayment' => [
             'status' => 1,
@@ -145,6 +163,7 @@ class Constants
             'payment_method_code' => 'UNZER_PREPAYMENT',
             'name' => 'Unzer Prepayment',
             'class_name' => 'UnzerPrepaymentPaymentMethod',
+            'sort_order' => 1800,
         ],
         'przelewy24' => [
             'status' => 1,
@@ -153,6 +172,7 @@ class Constants
             'payment_method_code' => 'UNZER_PRZELEWY24',
             'name' => 'Unzer Przelewy24',
             'class_name' => 'UnzerPrzelewy24PaymentMethod',
+            'sort_order' => 1200,
         ],
         'sepa_direct_debit' => [
             'status' => 1,
@@ -161,6 +181,7 @@ class Constants
             'payment_method_code' => 'UNZER_SEPA_DIRECT_DEBIT',
             'name' => 'Unzer SEPA Direct Debit',
             'class_name' => 'UnzerSepaDirectDebitPaymentMethod',
+            'sort_order' => 1700,
         ],
         'twint' => [
             'status' => 1,
@@ -169,6 +190,7 @@ class Constants
             'payment_method_code' => 'UNZER_TWINT',
             'name' => 'Unzer TWINT',
             'class_name' => 'UnzerTwintPaymentMethod',
+            'sort_order' => 1300,
         ],
         'wechatpay' => [
             'status' => 1,
@@ -177,6 +199,16 @@ class Constants
             'payment_method_code' => 'UNZER_WECHATPAY',
             'name' => 'Unzer WeChat Pay',
             'class_name' => 'UnzerWechatpayPaymentMethod',
+            'sort_order' => 2200,
+        ],
+        'wero' => [
+            'status' => 1,
+            'short_code' => 'wro',
+            'long_code' => 'wero',
+            'payment_method_code' => 'UNZER_WERO',
+            'name' => 'Unzer Wero',
+            'class_name' => 'UnzerWeroPaymentMethod',
+            'sort_order' => 800,
         ],
     ];
 }
