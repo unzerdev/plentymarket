@@ -134,7 +134,14 @@ class ServiceProvider extends ServiceProviderParent
                 if (!$paymentMethodService->isUnzerPaymentMethod((int)$event->getMop())) {
                     return;
                 }
-                $event->setType(GetPaymentMethodContent::RETURN_TYPE_CONTINUE);
+                $configService = pluginApp(ConfigService::class);
+                $this->log(__CLASS__, __METHOD__, 'isPreOrderPageActive', '', ['is' => $configService->isPreOrderPageActive()?1:0]);
+                if($configService->isPreOrderPageActive()){
+                    $event->setType(GetPaymentMethodContent::RETURN_TYPE_REDIRECT_URL);
+                    $event->setValue($configService->getPreOrderUrl());
+                }else {
+                    $event->setType(GetPaymentMethodContent::RETURN_TYPE_CONTINUE);
+                }
             }
         );
     }

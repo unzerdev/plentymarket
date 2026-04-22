@@ -35,6 +35,14 @@ class CheckoutController extends Controller
         $this->request = $request;
     }
 
+    public function preOrderPage(Twig $twig)
+    {
+        $configService = pluginApp(ConfigService::class);
+        $this->log(__CLASS__, __METHOD__, 'show');
+        return $twig->render('UnzerPayment::content.unzer-pre-order', ['placeOrderUrl' => $configService->getPlaceOrderUrl()]);
+
+    }
+
     public function payPage(Twig $twig)
     {
         $orderId = $this->request->get('orderId');

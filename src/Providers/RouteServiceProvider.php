@@ -11,6 +11,7 @@ class RouteServiceProvider extends RouteServiceProviderBase
     {
         //$router->get('payment/unzer-test', 'UnzerPayment\Controllers\SystemController@test');
         $router->get('payment/unzer-pay', 'UnzerPayment\Controllers\CheckoutController@payPage');
+        $router->get('payment/unzer-pre-order', 'UnzerPayment\Controllers\CheckoutController@preOrderPage');
         $router->get('payment/unzer-get-table', 'UnzerPayment\Controllers\SystemController@getTable');
         $router->get('payment/unzer-external-order-matching', 'UnzerPayment\Controllers\SystemController@externalOrderMatching');
         $router->post('payment/unzer-webhook', 'UnzerPayment\Controllers\WebhookController@webhook');
@@ -19,6 +20,5 @@ class RouteServiceProvider extends RouteServiceProviderBase
         $router->get('payment/unzer-checkout-pay-return', 'UnzerPayment\Controllers\CheckoutController@payReturn');
         $router->get('payment/unzer-checkout-cancel', 'UnzerPayment\Controllers\CheckoutController@cancel');
         $router->get('payment/unzer-checkout-error', 'UnzerPayment\Controllers\CheckoutController@checkoutError');
-        $router->get('.well-known/apple-developer-merchantid-domain-association', 'UnzerPayment\Controllers\SystemController@applePayDomainVerification');
     }
 }
