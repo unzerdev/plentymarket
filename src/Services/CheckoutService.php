@@ -46,6 +46,14 @@ class CheckoutService
         $shippingAmount = null;
         if ($shippingItem = $orderService->getShippingItemObject($order)) {
             $shippingAmount = $shippingItem->amounts[0];
+            if($shippingAmount->currency !== $amount->currency){
+                foreach($shippingItem->amounts as $cShippingAmount){
+                    if($cShippingAmount->currency === $amount->currency){
+                        $shippingAmount = $cShippingAmount;
+                        break;
+                    }
+                }
+            }
         }
 
         $items = [];
@@ -53,6 +61,14 @@ class CheckoutService
         foreach ($orderService->getRegularItemObjects($order) as $orderItem) {
             /** @var OrderItemAmount $orderItemAmount */
             $orderItemAmount = $orderItem->amounts[0];
+            if($orderItemAmount->currency !== $amount->currency){
+                foreach($orderItem->amounts as $cOrderItemAmount){
+                    if($cOrderItemAmount->currency === $amount->currency){
+                        $orderItemAmount = $cOrderItemAmount;
+                        break;
+                    }
+                }
+            }
             $item = [
                 'priceNet' => $orderItemAmount->priceNet,
                 'price' => $orderItemAmount->priceGross,

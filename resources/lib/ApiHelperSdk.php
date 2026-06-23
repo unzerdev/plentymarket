@@ -429,9 +429,14 @@ class ApiHelperSdk
             $item = (new BasketItem())
                 ->setTitle($name)
                 ->setQuantity((int)($itemData['quantity'] ?? 1))
-                ->setType($itemPrice > 0 ? BasketItemTypes::GOODS : BasketItemTypes::VOUCHER)
-                ->setAmountPerUnitGross(round(abs((float)$itemPrice), 2))
                 ->setVat(round((float)$itemVat, 2));
+            if($itemPrice > 0) {
+                $item->setType(BasketItemTypes::GOODS)
+                    ->setAmountPerUnitGross(round((float)$itemPrice, 2));
+            }else{
+                $item->setType(BasketItemTypes::VOUCHER)
+                    ->setAmountDiscountPerUnitGross(round(abs((float)$itemPrice), 2));
+            }
             $basketItems[] = $item;
         }
 
@@ -465,14 +470,14 @@ class ApiHelperSdk
         if (number_format($totalLeft, 2) !== '0.00') {
             if ($totalLeft < 0) {
                 $adjustmentItem = (new BasketItem())
-                    ->setTitle('---')
+                    ->setTitle('Correction/Korrektur')
                     ->setQuantity(1)
                     ->setType(BasketItemTypes::VOUCHER)
                     ->setAmountDiscountPerUnitGross(round(abs($totalLeft), 2))
                     ->setVat(0);
             } else {
                 $adjustmentItem = (new BasketItem())
-                    ->setTitle('---')
+                    ->setTitle('Correction/Korrektur')
                     ->setQuantity(1)
                     ->setType(BasketItemTypes::GOODS)
                     ->setAmountPerUnitGross(round($totalLeft, 2));
