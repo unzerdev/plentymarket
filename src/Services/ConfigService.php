@@ -142,6 +142,7 @@ class ConfigService
                 break;
             case 'gop':
                 $response = (string)$this->getConfigurationValue('bookingModeGooglePay');
+                break;
             case 'ppl':
                 $response = (string)$this->getConfigurationValue('bookingModePaypal');
                 break;
