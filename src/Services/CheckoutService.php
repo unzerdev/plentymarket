@@ -113,7 +113,7 @@ class CheckoutService
 
         if($allPaymentMethods){
             $frontendPaymentRepository = pluginApp(FrontendPaymentMethodRepositoryContract::class);
-            $switchableToPaymentMethods = $frontendPaymentRepository->getCurrentPaymentMethodsListForSwitch($paymentMethodId. $order->id);
+            $switchableToPaymentMethods = $frontendPaymentRepository->getCurrentPaymentMethodsListForSwitch($paymentMethodId, $order->id);
             $this->log(__CLASS__, __METHOD__, 'switchableTo', '', ['$switchableToPaymentMethods' => $switchableToPaymentMethods]);
             $shortCodes = [];
             foreach($switchableToPaymentMethods as $switchableToPaymentMethod){

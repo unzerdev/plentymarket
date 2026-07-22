@@ -5,7 +5,7 @@ namespace UnzerPayment\Constants;
 class Constants
 {
     const PLUGIN_NAME = 'UnzerPayment';
-    const UNZER_PAYMENT_ID_PATTERN = '/p-pay-\d+/';
+    const UNZER_PAYMENT_ID_PATTERN = '/[sp]-pay-\d+/';
     const PLUGIN_KEY = 'unzer_payment';
     const SESSION_KEY_PAYMENT_ID = 'unzer_payment_id';
 

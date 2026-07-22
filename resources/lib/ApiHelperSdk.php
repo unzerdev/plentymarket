@@ -439,7 +439,7 @@ class ApiHelperSdk
             }
             $basketItems[] = $item;
         }
-
+        $basketData = $checkoutData['basket'] ?? [];
         // Process shipping costs if present.
         if (!empty($basketData['shippingAmount']) && (float)$basketData['shippingAmount'] > 0) {
             $shippingAmount = round((float)$basketData['shippingAmount'], 2);

@@ -2,9 +2,7 @@
 
 namespace UnzerPayment\Services;
 
-use AmazonPayCheckout\Helpers\ConfigHelper;
 use Exception;
-use IO\Constants\OrderPaymentStatus;
 use Plenty\Modules\Authorization\Services\AuthHelper;
 use Plenty\Modules\Order\Contracts\OrderRepositoryContract;
 use Plenty\Modules\Order\Models\Order;
@@ -17,12 +15,19 @@ use Plenty\Modules\Payment\Contracts\PaymentOrderRelationRepositoryContract;
 use Plenty\Modules\Payment\Contracts\PaymentRepositoryContract;
 use Plenty\Modules\Payment\Models\Payment;
 use Plenty\Modules\Payment\Models\PaymentProperty;
+use Plenty\Modules\Plugin\DataBase\Contracts\DataBase;
+use UnzerPayment\Models\Transaction;
+use UnzerPayment\Models\UnzerData;
 use UnzerPayment\Repositories\TransactionRepository;
+use UnzerPayment\Repositories\UnzerDataRepository;
 use UnzerPayment\Traits\LoggingTrait;
 
 class OrderService
 {
     use LoggingTrait;
+
+    private const PAYMENT_DEDUPLICATION_KEY_PREFIX = 'paymentDeduplication-';
+    private const PAYMENT_DEDUPLICATION_KEY_MAX_AGE_SECONDS = 3600;
 
     public function syncPaymentInformation(int $orderId, string $unzerPaymentId, $comment = ''): bool
     {
@@ -45,7 +50,7 @@ class OrderService
         $transaction = $transactionRepository->getTransactionByUnzerPaymentId($unzerPaymentId);
 
         if (empty($transaction)) {
-            $transaction = pluginApp(TransactionService::class);
+            $transaction = pluginApp(Transaction::class);
             $transaction->unzerPaymentId = $unzerPaymentId;
         }
         $transaction->orderId = $orderId;
@@ -93,10 +98,10 @@ class OrderService
             }
         }
 
-        if(empty($payment['charges']) && !empty($payment['authorization']) && $payment['authorization']['isSuccess']){
+        if (empty($payment['charges']) && !empty($payment['authorization']) && $payment['authorization']['isSuccess']) {
             $this->log(__CLASS__, __METHOD__, 'authorized', '', ['$payment' => $payment]);
             $this->setOrderStatusAuthorized($orderId);
-        }else{
+        } else {
             $this->log(__CLASS__, __METHOD__, 'notAuthorized', '', ['$payment' => $payment]);
         }
 
@@ -137,7 +142,7 @@ class OrderService
         return null;
     }
 
-    public function setOrderStatusAuthorized($orderId):void
+    public function setOrderStatusAuthorized($orderId): void
     {
         /** @var OrderRepositoryContract $orderRepository */
         $orderRepository = pluginApp(OrderRepositoryContract::class);
@@ -294,6 +299,16 @@ class OrderService
         return $paymentProperty;
     }
 
+    private function getPaymentProperty(Payment $payment, int $typeId): ?PaymentProperty
+    {
+        foreach ($payment->properties as $property) {
+            if ($property->typeId === $typeId) {
+                return $property;
+            }
+        }
+        return null;
+    }
+
     /**
      * @param Payment $payment
      * @param Order $order
@@ -302,18 +317,53 @@ class OrderService
      */
     public function assignPlentyPaymentToPlentyOrder(Payment $payment, Order $order): bool
     {
+        $deduplicateKeys = [];
+        $currentDeduplicateKey = null;
+        $time = time();
+        try {
+            $paymentTransactionProperty = $this->getPaymentProperty($payment, PaymentProperty::TYPE_TRANSACTION_ID);
+            if (!empty($paymentTransactionProperty)) {
+                $deduplicateKeyBase = self::PAYMENT_DEDUPLICATION_KEY_PREFIX . $payment->transactionType . '-' . $payment->type . '-' . $paymentTransactionProperty->value;
+                $currentDeduplicateKey = $deduplicateKeyBase . '-' . $time;
+                // block everything +/- 2 seconds
+                foreach ([-2, -1, 0, 1, 2] as $timeOffset) {
+                    $deduplicateKeys[] = $deduplicateKeyBase . '-' . ($time + $timeOffset);
+
+                }
+            }
+        } catch (\Throwable $exception) {
+            $this->error(__CLASS__, __METHOD__, 'error_deduplicate_key', $exception->getMessage());
+        }
+
         $this->log(__CLASS__, __METHOD__, 'start', '', ['order' => $order, 'payment' => $payment]);
 
         try {
-            $authHelper = pluginApp(AuthHelper::class);
-            $paymentOrderRelationRepository = pluginApp(PaymentOrderRelationRepositoryContract::class);
-
-            $return = $authHelper->processUnguarded(
-                function () use ($paymentOrderRelationRepository, $payment, $order) {
-                    return $paymentOrderRelationRepository->createOrderRelation($payment, $order);
+            $existingUnzerDataEntries = [];
+            if (!empty($deduplicateKeys)) {
+                $database = pluginApp(DataBase::class);
+                $existingUnzerDataEntries = $database->query(UnzerData::class)
+                    ->whereIn('dataKey', $deduplicateKeys)
+                    ->get();
+            }
+            if (empty($existingUnzerDataEntries)) {
+                if (!empty($currentDeduplicateKey)) {
+                    $this->persistDeduplicateKey($currentDeduplicateKey, $time);
                 }
-            );
-            $this->log(__CLASS__, __METHOD__, 'success', '', [$return]);
+                $authHelper = pluginApp(AuthHelper::class);
+                $paymentOrderRelationRepository = pluginApp(PaymentOrderRelationRepositoryContract::class);
+                $return = $authHelper->processUnguarded(
+                    function () use ($paymentOrderRelationRepository, $payment, $order) {
+                        return $paymentOrderRelationRepository->createOrderRelation($payment, $order);
+                    }
+                );
+                $this->log(__CLASS__, __METHOD__, 'success', '', [$return]);
+            } else {
+                $this->log(__CLASS__, __METHOD__, 'deduplicate', 'Prevented a duplicate payment entry', [
+                    'payment' => $payment,
+                    'order' => $order,
+                    'deduplicateKeys' => $deduplicateKeys,
+                ]);
+            }
 
         } catch (Exception $e) {
             $this->log(__CLASS__, __METHOD__, 'error', 'assign payment to order failed', [$e, $e->getMessage()], true);
@@ -321,6 +371,43 @@ class OrderService
         }
 
         return true;
+    }
+
+    private function persistDeduplicateKey(string $deduplicateKey, int $time): void
+    {
+        try {
+            $unzerDataRepository = pluginApp(UnzerDataRepository::class);
+            $unzerDataRepository->create([
+                'dataKey' => $deduplicateKey,
+                'dataValue' => ['value' => $time],
+            ]);
+        } catch (\Throwable $exception) {
+            $this->error(__CLASS__, __METHOD__, 'error_deduplicate_key_persist', $exception->getMessage());
+        }
+    }
+
+    public function cleanUpDeduplicateKeys(int $now): void
+    {
+        try {
+            $database = pluginApp(DataBase::class);
+            $deduplicateKeyEntries = $database->query(UnzerData::class)
+                ->where('dataKey', 'like', self::PAYMENT_DEDUPLICATION_KEY_PREFIX . '%')
+                ->get();
+            $unzerDataRepository = pluginApp(UnzerDataRepository::class);
+            /** @var UnzerData $deduplicateKeyEntry */
+            foreach ($deduplicateKeyEntries as $deduplicateKeyEntry) {
+                $createdAt = (int)($deduplicateKeyEntry->dataValue['value'] ?? 0);
+                $this->log(__CLASS__, __METHOD__, 'dedup created at', '',[
+                    'createdAt' => $createdAt,
+                    'threshold' => $now - self::PAYMENT_DEDUPLICATION_KEY_MAX_AGE_SECONDS
+                ]);
+                if ($createdAt < $now - self::PAYMENT_DEDUPLICATION_KEY_MAX_AGE_SECONDS) {
+                    $unzerDataRepository->delete($deduplicateKeyEntry);
+                }
+            }
+        } catch (\Throwable $exception) {
+            $this->error(__CLASS__, __METHOD__, 'error_deduplicate_key_cleanup', $exception->getMessage());
+        }
     }
 
     /**
@@ -377,15 +464,16 @@ class OrderService
         return $return;
     }
 
-    public function getOrderRelationValue($order, string $relationType){
+    public function getOrderRelationValue($order, string $relationType)
+    {
         $relations = $order->relations ?? [];
-        $this->log(__CLASS__, __METHOD__, 'allRelations', '', ['$relations'=>$relations, '$order'=>$order]);
-        foreach($relations as $relation){
-            if(!is_object($relation)){
+        $this->log(__CLASS__, __METHOD__, 'allRelations', '', ['$relations' => $relations, '$order' => $order]);
+        foreach ($relations as $relation) {
+            if (!is_object($relation)) {
                 continue;
             }
-            $this->log(__CLASS__, __METHOD__, 'relation', '', ['$relation'=>$relation]);
-            if($relation->relation === $relationType){
+            $this->log(__CLASS__, __METHOD__, 'relation', '', ['$relation' => $relation]);
+            if ($relation->relation === $relationType) {
                 return $relation->referenceId;
             }
         }
