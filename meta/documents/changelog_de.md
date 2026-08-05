@@ -1,7 +1,12 @@
 # Versionshinweise für Unzer Payments
 
-## 1.2.0
+## 1.3.0
+* Unterstützung für die neue Gutschein-Logik
+* Verbesserter Checkout-Ablauf
+* Neue Warte-Logik beim Anlegen eines Auftrags, um den Checkout zu verbessern und abgebrochene Verkäufe zu vermeiden
+* Besseres Webhook-Handling, um die Meldung für Überbezahlung zu vermeiden
 
+## 1.2.0
 __Dies ist eine grundlegende Änderung - denken Sie daran, vor dem Update Ihrer LIVE-Umgebung zu testen und ein Backup zu erstellen.__
 * Neu: Umstrukturierung des Checkout-/Bestellvorgangs für eine bessere Bestellabwicklung
 * Neu: Buchungsmodus für Apple Pay, Google Pay, Paypal und Kreditkarte

@@ -79,8 +79,8 @@ class ApiHelperSdk
                     'id' => $authorization->getId(),
                     'isSuccess' => $authorization->isSuccess(),
                     'isPending' => $authorization->isPending(),
-                    'amount'=>$authorization->getAmount(),
-                    'currency'=>$authorization->getCurrency(),
+                    'amount' => $authorization->getAmount(),
+                    'currency' => $authorization->getCurrency(),
                 ];
             }
 
@@ -251,9 +251,9 @@ class ApiHelperSdk
             ->setCompany($companyName)
             ->setEmail(self::getOption($billingAddress['options'] ?? [], self::PLENTY_ADDRESS_OPTION_EMAIL) ?? '');
 
-        if(!empty($companyName)){
+        if (!empty($companyName)) {
             $companyInfo = $customer->getCompanyInfo();
-            if(empty($companyInfo) || empty($companyInfo->getCompanyType())){
+            if (empty($companyInfo) || empty($companyInfo->getCompanyType())) {
                 $companyInfo = (new CompanyInfo())
                     ->setCompanyType('Company Type')
                     ->setRegistrationType('not_registered')
@@ -320,69 +320,8 @@ class ApiHelperSdk
             ->setOrderId($orderReference)
             ->setCurrencyCode($basketData['currency'] ?? '');
 
-        $basketItems = [];
+        $this->addBasketItems( $basket, $checkoutData, $isNet);
 
-        // Process each basket item.
-        foreach ($checkoutData['basketItems'] as $itemData) {
-            $itemPrice = $isNet ? ($itemData['priceNet'] ?? 0) : ($itemData['price'] ?? 0);
-            $itemVatAbs = $isNet ? 0 : ($itemData['vat'] ?? 0);
-            $itemPriceNet = $itemPrice - $itemVatAbs;
-            $itemVat = ($itemPriceNet > 0) ? ($itemVatAbs / $itemPriceNet) * 100 : 0;
-            $name = $itemData['name'] ?? $itemData['variation_data']['data']['texts']['name1'] ?? $itemData['variationId'] . '_' . uniqid();
-            $item = (new BasketItem())
-                ->setTitle($name)
-                ->setQuantity((int)($itemData['quantity'] ?? 1))
-                ->setType(BasketItemTypes::GOODS)
-                ->setAmountPerUnitGross(round((float)$itemPrice, 2))
-                ->setVat(round((float)$itemVat, 2));
-            $basketItems[] = $item;
-        }
-
-        // Process shipping costs if present.
-        if (!empty($basketData['shippingAmount']) && (float)$basketData['shippingAmount'] > 0) {
-            $shippingAmount = round((float)$basketData['shippingAmount'], 2);
-            $shippingAmountNet = round((float)($basketData['shippingAmountNet'] ?? 0), 2);
-            $shippingVatAbs = $shippingAmount - $shippingAmountNet;
-            $shippingVat = ($shippingAmountNet > 0) ? ($shippingVatAbs / $shippingAmountNet) * 100 : 0;
-
-            if ($isNet) {
-                $shippingVat = 0;
-                $shippingAmount = $shippingAmountNet;
-            }
-
-            $shippingItem = (new BasketItem())
-                ->setTitle('Shipping')
-                ->setQuantity(1)
-                ->setType(BasketItemTypes::SHIPMENT)
-                ->setAmountPerUnitGross($shippingAmount)
-                ->setVat($shippingVat);
-            $basketItems[] = $shippingItem;
-        }
-
-        $totalLeft = $basket->getTotalValueGross();
-        foreach ($basketItems as $basketItem) {
-            $totalLeft -= $basketItem->getAmountPerUnitGross() * $basketItem->getQuantity();
-            $totalLeft += $basketItem->getAmountDiscountPerUnitGross() * $basketItem->getQuantity();
-        }
-
-        if (number_format($totalLeft, 2) !== '0.00') {
-            if ($totalLeft < 0) {
-                $adjustmentItem = (new BasketItem())
-                    ->setTitle('---')
-                    ->setQuantity(1)
-                    ->setType(BasketItemTypes::VOUCHER)
-                    ->setAmountDiscountPerUnitGross(round(abs($totalLeft), 2))
-                    ->setVat(0);
-            } else {
-                $adjustmentItem = (new BasketItem())
-                    ->setTitle('---')
-                    ->setQuantity(1)
-                    ->setType(BasketItemTypes::GOODS)
-                    ->setAmountPerUnitGross(round($totalLeft, 2));
-            }
-            $basketItems[] = $adjustmentItem;
-        }
-        $basket->setBasketItems($basketItems);
         return $this->getUnzerObject()->createBasket($basket);
     }
 
@@ -476,6 +415,76 @@ class ApiHelperSdk
             ];
         }
         return $result;
+    }
+
+    private function addBasketItems($basket, $checkoutData, bool $isNet):void
+    {
+        $basketItems = [];
+        foreach ($checkoutData['basketItems'] as $itemData) {
+            $itemPrice = $isNet ? ($itemData['priceNet'] ?? 0) : ($itemData['price'] ?? 0);
+            $itemVatAbs = $isNet ? 0 : ($itemData['vat'] ?? 0);
+            $itemPriceNet = $itemPrice - $itemVatAbs;
+            $itemVat = ($itemPriceNet > 0) ? ($itemVatAbs / $itemPriceNet) * 100 : 0;
+            $name = $itemData['name'] ?? $itemData['variation_data']['data']['texts']['name1'] ?? $itemData['variationId'] . '_' . uniqid();
+            $item = (new BasketItem())
+                ->setTitle($name)
+                ->setQuantity((int)($itemData['quantity'] ?? 1))
+                ->setVat(round((float)$itemVat, 2));
+            if($itemPrice > 0) {
+                $item->setType(BasketItemTypes::GOODS)
+                    ->setAmountPerUnitGross(round((float)$itemPrice, 2));
+            }else{
+                $item->setType(BasketItemTypes::VOUCHER)
+                    ->setAmountDiscountPerUnitGross(round(abs((float)$itemPrice), 2));
+            }
+            $basketItems[] = $item;
+        }
+        $basketData = $checkoutData['basket'] ?? [];
+        // Process shipping costs if present.
+        if (!empty($basketData['shippingAmount']) && (float)$basketData['shippingAmount'] > 0) {
+            $shippingAmount = round((float)$basketData['shippingAmount'], 2);
+            $shippingAmountNet = round((float)($basketData['shippingAmountNet'] ?? 0), 2);
+            $shippingVatAbs = $shippingAmount - $shippingAmountNet;
+            $shippingVat = ($shippingAmountNet > 0) ? ($shippingVatAbs / $shippingAmountNet) * 100 : 0;
+
+            if ($isNet) {
+                $shippingVat = 0;
+                $shippingAmount = $shippingAmountNet;
+            }
+
+            $shippingItem = (new BasketItem())
+                ->setTitle('Shipping')
+                ->setQuantity(1)
+                ->setType(BasketItemTypes::SHIPMENT)
+                ->setAmountPerUnitGross($shippingAmount)
+                ->setVat($shippingVat);
+            $basketItems[] = $shippingItem;
+        }
+
+        $totalLeft = $basket->getTotalValueGross();
+        foreach ($basketItems as $basketItem) {
+            $totalLeft -= $basketItem->getAmountPerUnitGross() * $basketItem->getQuantity();
+            $totalLeft += $basketItem->getAmountDiscountPerUnitGross() * $basketItem->getQuantity();
+        }
+
+        if (number_format($totalLeft, 2) !== '0.00') {
+            if ($totalLeft < 0) {
+                $adjustmentItem = (new BasketItem())
+                    ->setTitle('Correction/Korrektur')
+                    ->setQuantity(1)
+                    ->setType(BasketItemTypes::VOUCHER)
+                    ->setAmountDiscountPerUnitGross(round(abs($totalLeft), 2))
+                    ->setVat(0);
+            } else {
+                $adjustmentItem = (new BasketItem())
+                    ->setTitle('Correction/Korrektur')
+                    ->setQuantity(1)
+                    ->setType(BasketItemTypes::GOODS)
+                    ->setAmountPerUnitGross(round($totalLeft, 2));
+            }
+            $basketItems[] = $adjustmentItem;
+        }
+        $basket->setBasketItems($basketItems);
     }
 
 }

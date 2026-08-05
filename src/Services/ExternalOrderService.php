@@ -115,7 +115,7 @@ class ExternalOrderService
         foreach ($candidates as $candidate) {
             if ($unzerPaymentId = $this->findUnzerPaymentIdInString($candidate)) {
                 $unzerPayment = $this->apiService->getUnzerPayment($unzerPaymentId);
-                $unzerPaymentAmount = 0; //TODO
+                $unzerPaymentAmount = $unzerPayment['amount']['total'] ?? 0;
                 if (number_format($unzerPaymentAmount, 2) === number_format($orderAmount, 2)) {
                     $this->log(__CLASS__, __METHOD__, 'stringBasedMatch', '', [
                         'unzerPayment' => $unzerPayment,

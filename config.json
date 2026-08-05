@@ -27,6 +27,14 @@
                     "options": {
                         "defaultValue": "false"
                     }
+                },
+                "usePreOrderPage": {
+                    "type": "checkBox",
+                    "required": false,
+                    "label": "Config.usePreOrderPage",
+                    "options": {
+                        "defaultValue": "false"
+                    }
                 }
             }
         },

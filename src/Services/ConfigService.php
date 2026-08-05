@@ -115,6 +115,11 @@ class ConfigService
         return $this->getConfigurationValue('useExternalOrderMatching') === 'true';
     }
 
+    public function isPreOrderPageActive(): bool
+    {
+        return $this->getConfigurationValue('usePreOrderPage') === 'true';
+    }
+
     public function getPrivateKey(): string
     {
         return (string)$this->getConfigurationValue('privateKey');
@@ -137,6 +142,7 @@ class ConfigService
                 break;
             case 'gop':
                 $response = (string)$this->getConfigurationValue('bookingModeGooglePay');
+                break;
             case 'ppl':
                 $response = (string)$this->getConfigurationValue('bookingModePaypal');
                 break;
@@ -150,6 +156,16 @@ class ConfigService
     public function getPayUrl($orderId, $orderAccessKey, $allMethods = false): ?string
     {
         return $this->getUrl('payment/unzer-pay').'?orderId='.$orderId.'&orderAccessKey='.$orderAccessKey.($allMethods?'&allMethods=1':'');
+    }
+
+    public function getPreOrderUrl(): ?string
+    {
+        return $this->getUrl('payment/unzer-pre-order');
+    }
+
+    public function getPlaceOrderUrl(): ?string
+    {
+        return $this->getUrl('place-order');
     }
 
     public function getWebhookUrl(): ?string

@@ -187,7 +187,7 @@ class ApiService
             'paymentId' => $paymentId,
             'amount' => $amount,
         ]);
-        return $response['response']['payment'] ?? null;
+        return $response['response']['charge'] ?? null;
     }
 
     public function refund(string $paymentId, float $amount): ?array

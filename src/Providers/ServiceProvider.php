@@ -2,8 +2,6 @@
 
 namespace UnzerPayment\Providers;
 
-use AmazonPayCheckout\Helpers\ConfigHelper;
-use AmazonPayCheckout\Providers\DataProviderJavascript;
 use Ceres\Helper\LayoutContainer;
 use Plenty\Modules\Basket\Contracts\BasketRepositoryContract;
 use Plenty\Modules\Basket\Events\Basket\AfterBasketChanged;
@@ -20,15 +18,12 @@ use Plenty\Modules\Frontend\Events\FrontendShippingCountryChanged;
 use Plenty\Modules\Payment\Events\Checkout\ExecutePayment;
 use Plenty\Modules\Payment\Events\Checkout\GetPaymentMethodContent;
 use Plenty\Modules\Payment\Method\Contracts\PaymentMethodContainer;
-use Plenty\Modules\Webshop\Contracts\SessionStorageRepositoryContract;
 use Plenty\Plugin\Events\Dispatcher;
 use Plenty\Plugin\ServiceProvider as ServiceProviderParent;
-use Plenty\Plugin\Templates\Twig;
 use UnzerPayment\Constants\Constants;
 use UnzerPayment\Contracts\TransactionRepositoryContract;
 use UnzerPayment\CronHandlers\ExternalOrderMatcherCronHandler;
 use UnzerPayment\Repositories\TransactionRepository;
-use UnzerPayment\Services\ApiService;
 use UnzerPayment\Services\ConfigService;
 use UnzerPayment\Services\OrderService;
 use UnzerPayment\Services\PaymentMethodService;
@@ -134,7 +129,14 @@ class ServiceProvider extends ServiceProviderParent
                 if (!$paymentMethodService->isUnzerPaymentMethod((int)$event->getMop())) {
                     return;
                 }
-                $event->setType(GetPaymentMethodContent::RETURN_TYPE_CONTINUE);
+                $configService = pluginApp(ConfigService::class);
+                $this->log(__CLASS__, __METHOD__, 'isPreOrderPageActive', '', ['is' => $configService->isPreOrderPageActive() ? 1 : 0]);
+                if ($configService->isPreOrderPageActive()) {
+                    $event->setType(GetPaymentMethodContent::RETURN_TYPE_REDIRECT_URL);
+                    $event->setValue($configService->getPreOrderUrl());
+                } else {
+                    $event->setType(GetPaymentMethodContent::RETURN_TYPE_CONTINUE);
+                }
             }
         );
     }

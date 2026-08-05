@@ -1,0 +1,120 @@
+{% block UnzerPreOrderStyles %}
+    <style>
+        .unzer-pre-order {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 70vh;
+            padding: 3rem 1.5rem;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #1f2937;
+        }
+
+        .unzer-pre-order__inner {
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        .unzer-pre-order__heading {
+            font-size: 1.125rem;
+            font-weight: 500;
+            line-height: 1.5;
+            letter-spacing: -0.01em;
+            margin: 0 0 2rem;
+            color: #111827;
+        }
+
+        .unzer-pre-order__progress {
+            position: relative;
+            width: 100%;
+            height: 4px;
+            background: #eef0f3;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-bottom: 1.25rem;
+        }
+
+        .unzer-pre-order__progress-bar {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            background: #111827;
+            border-radius: 999px;
+            animation: unzer-pre-order-fill 10s ease-in-out infinite;
+        }
+
+        @keyframes unzer-pre-order-fill {
+            from { width: 0; }
+            to   { width: 100%; }
+        }
+
+        .unzer-pre-order__status {
+            min-height: 1.5em;
+            font-size: 0.875rem;
+            font-weight: 400;
+            letter-spacing: 0.01em;
+            color: #6b7280;
+            transition: opacity 0.4s ease;
+        }
+
+        .unzer-pre-order__status.is-fading {
+            opacity: 0;
+        }
+    </style>
+{% endblock %}
+
+{% block UnzerPreOrderContent %}
+    <div class="unzer-pre-order">
+        <div class="unzer-pre-order__inner" role="status" aria-live="polite">
+            {% block UnzerPreOrderHeading %}
+                <p class="unzer-pre-order__heading">
+                    {{ trans("UnzerPayment::Frontend.pleaseWait") }}
+                </p>
+            {% endblock %}
+
+            {% block UnzerPreOrderProgress %}
+                <div class="unzer-pre-order__progress" aria-hidden="true">
+                    <div class="unzer-pre-order__progress-bar"></div>
+                </div>
+            {% endblock %}
+
+            {% block UnzerPreOrderStatus %}
+                <p id="unzerPreOrderStatus" class="unzer-pre-order__status">
+                    {{ trans("UnzerPayment::Frontend.preOrderText1") }}
+                </p>
+            {% endblock %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block UnzerPreOrderScript %}
+    <script>
+        (function () {
+            var messages = [
+                {{ trans("UnzerPayment::Frontend.preOrderText1")|json_encode()|raw }},
+                {{ trans("UnzerPayment::Frontend.preOrderText2")|json_encode()|raw }},
+                {{ trans("UnzerPayment::Frontend.preOrderText3")|json_encode()|raw }},
+                {{ trans("UnzerPayment::Frontend.preOrderText4")|json_encode()|raw }}
+            ];
+            var el = document.getElementById('unzerPreOrderStatus');
+            var index = 0;
+
+            setInterval(function () {
+                index = (index + 1) % messages.length;
+                el.classList.add('is-fading');
+                setTimeout(function () {
+                    el.textContent = messages[index];
+                    el.classList.remove('is-fading');
+                }, 400);
+            }, 5000);
+
+            if (!window.unzerDebugNoRedirect) {
+                const debugDelay = localStorage.getItem('unzerDebug') === 'true' ? 15000 : 0;
+                setTimeout(function () {
+                    location.href = '{{ placeOrderUrl }}';
+                }, debugDelay);
+            }
+        })();
+    </script>
+{% endblock %}

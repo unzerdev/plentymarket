@@ -1,7 +1,12 @@
 # Release notes for Unzer Payments
 
-## 1.2.0
+## 1.3.0
+* Support for new voucher handling logic
+* Improved checkout flow
+* Introduced waiting for order creation logic, to improve checkout and avoid lost sales
+* Better webhook handling to avoid order 200% paid message
 
+## 1.2.0
 __This is a breaking change - remember to test and create backup before updating your LIVE environment.__
 * New: Restructure checkout/order event for better order handling
 * New: Booking mode for Apple Pay, Google Pay, Paypal and Credit Card
