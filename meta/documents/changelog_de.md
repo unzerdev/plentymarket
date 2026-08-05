@@ -1,6 +1,6 @@
 # Versionshinweise für Unzer Payments
 
-## 1.2.0-d
+## 1.3.0
 * Unterstützung für die neue Gutschein-Logik
 * Verbesserter Checkout-Ablauf
 * Neue Warte-Logik beim Anlegen eines Auftrags, um den Checkout zu verbessern und abgebrochene Verkäufe zu vermeiden

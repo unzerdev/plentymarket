@@ -1,6 +1,6 @@
 # Release notes for Unzer Payments
 
-## 1.2.0-d
+## 1.3.0
 * Support for new voucher handling logic
 * Improved checkout flow
 * Introduced waiting for order creation logic, to improve checkout and avoid lost sales
